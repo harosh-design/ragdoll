@@ -34,29 +34,7 @@ export function render(ctx, world, size, scale = 100, opts = {}) {
 
   for (let i = 0; i < world.bodies.length; i++) {
     const body = world.bodies[i]
-    if (body.isBall) {
-      const pos = body.interpolatedPosition ?? body.position
-      const angle = body.interpolatedAngle ?? body.angle
-      for (let j = 0; j < body.shapes.length; j++) {
-        const shape = body.shapes[j]
-        if (shape.type === p2.Shape.CIRCLE) {
-          const r = shape.radius
-          const c = toCanvas(pos[0], pos[1], scale, centerX, centerY)
-          ctx.save()
-          ctx.translate(c.x, c.y)
-          ctx.rotate(-angle)
-          ctx.beginPath()
-          ctx.arc(0, 0, scale * r, 0, Math.PI * 2)
-          ctx.fillStyle = '#ffc107'
-          ctx.fill()
-          ctx.strokeStyle = '#e65100'
-          ctx.lineWidth = 2
-          ctx.stroke()
-          ctx.restore()
-        }
-      }
-      continue
-    }
+    if (body.isBall) continue
     if (body.type === p2.Body.STATIC) {
       const hasPlane = body.shapes.some((s) => s.type === p2.Shape.PLANE)
       if (hasPlane) {
@@ -132,6 +110,32 @@ export function render(ctx, world, size, scale = 100, opts = {}) {
           ctx.lineWidth = 2
           ctx.stroke()
         }
+      }
+    }
+  }
+
+  // Мяч поверх ладони и руки
+  for (let i = 0; i < world.bodies.length; i++) {
+    const body = world.bodies[i]
+    if (!body.isBall) continue
+    const pos = body.interpolatedPosition ?? body.position
+    const angle = body.interpolatedAngle ?? body.angle
+    for (let j = 0; j < body.shapes.length; j++) {
+      const shape = body.shapes[j]
+      if (shape.type === p2.Shape.CIRCLE) {
+        const r = shape.radius
+        const c = toCanvas(pos[0], pos[1], scale, centerX, centerY)
+        ctx.save()
+        ctx.translate(c.x, c.y)
+        ctx.rotate(-angle)
+        ctx.beginPath()
+        ctx.arc(0, 0, scale * r, 0, Math.PI * 2)
+        ctx.fillStyle = '#ffc107'
+        ctx.fill()
+        ctx.strokeStyle = '#e65100'
+        ctx.lineWidth = 2
+        ctx.stroke()
+        ctx.restore()
       }
     }
   }

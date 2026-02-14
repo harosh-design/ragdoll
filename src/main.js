@@ -91,7 +91,8 @@ world.addBody(ceiling)
 const BALL_RADIUS = 0.25
 const ballShape = new p2.Circle({ radius: BALL_RADIUS })
 ballShape.collisionGroup = OTHER
-ballShape.collisionMask = GROUND | BODYPARTS
+// В руке — без коллизии с куклой, чтобы рука не отлетала при касании тела
+ballShape.collisionMask = GROUND
 const ballMaterial = new p2.Material()
 ballShape.material = ballMaterial
 
@@ -116,19 +117,15 @@ const ragdoll = createRagdoll(world, WORLD_BOTTOM)
 // Ладонь правой руки = конец предплечья (local +x у lowerRightArm)
 const lowerRightArmShape = ragdoll.lowerRightArm.shapes[0]
 const handPivotX = lowerRightArmShape.width / 2
+const BALL_OFFSET_Y = -0.06
 
-const ballHoldConstraint = new p2.LockConstraint(ball, ragdoll.lowerRightArm, {
-  localPivotA: [0, 0],
-  localPivotB: [handPivotX, 0],
-})
-world.addConstraint(ballHoldConstraint)
 let ballHeld = true
 
-// Place ball at hand for first frame (same offset as constraint)
+// Place ball at hand for first frame (чуть ниже ладони)
 const hand = ragdoll.lowerRightArm
 const a = hand.angle ?? 0
 const hx = hand.position[0] + handPivotX * Math.cos(a)
-const hy = hand.position[1] + handPivotX * Math.sin(a)
+const hy = hand.position[1] + handPivotX * Math.sin(a) + BALL_OFFSET_Y
 ball.position[0] = hx
 ball.position[1] = hy
 for (const body of ragdoll.bodies) {
@@ -145,8 +142,8 @@ initSettingsPanel()
 
 window.addEventListener('keydown', (e) => {
   if (e.code === 'KeyR' && ballHeld) {
-    world.removeConstraint(ballHoldConstraint)
     ballHeld = false
+    ballShape.collisionMask = GROUND | BODYPARTS
     const speed = 14
     const angleDeg = 30
     const angleRad = (angleDeg * Math.PI) / 180
@@ -233,6 +230,17 @@ function gameLoop(now) {
       ball.applyForce([0, -ball.mass * gBall])
     }
     world.step(FIXED_DT)
+    // Кинематическое крепление мяча к ладони (после step — актуальная позиция руки, чуть ниже)
+    if (ballHeld) {
+      const arm = ragdoll.lowerRightArm
+      const ang = arm.angle
+      const ax = arm.position[0]
+      const ay = arm.position[1]
+      ball.position[0] = ax + handPivotX * Math.cos(ang)
+      ball.position[1] = ay + handPivotX * Math.sin(ang) + BALL_OFFSET_Y
+      ball.velocity[0] = arm.velocity[0] - arm.angularVelocity * handPivotX * Math.sin(ang)
+      ball.velocity[1] = arm.velocity[1] + arm.angularVelocity * handPivotX * Math.cos(ang)
+    }
     accumulator -= FIXED_DT
   }
 

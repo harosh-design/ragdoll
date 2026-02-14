@@ -160,16 +160,16 @@ export function createRagdoll(world, groundY) {
   head.addShape(headShape)
   world.addBody(head)
 
-  // Upper arms
+  // Upper arms (лёгкие)
   const upperLeftArm = new p2.Body({
-    mass: 1,
+    mass: 0.5,
     position: [
       -shouldersDistance / 2 - upperArmLength / 2,
       upperBody.position[1] + upperBodyLength / 2,
     ],
   })
   const upperRightArm = new p2.Body({
-    mass: 1,
+    mass: 0.5,
     position: [
       shouldersDistance / 2 + upperArmLength / 2,
       upperBody.position[1] + upperBodyLength / 2,
@@ -180,16 +180,16 @@ export function createRagdoll(world, groundY) {
   world.addBody(upperLeftArm)
   world.addBody(upperRightArm)
 
-  // Lower arms
+  // Lower arms (лёгкие)
   const lowerLeftArm = new p2.Body({
-    mass: 1,
+    mass: 0.5,
     position: [
       upperLeftArm.position[0] - lowerArmLength / 2 - upperArmLength / 2,
       upperLeftArm.position[1],
     ],
   })
   const lowerRightArm = new p2.Body({
-    mass: 1,
+    mass: 0.5,
     position: [
       upperRightArm.position[0] + lowerArmLength / 2 + upperArmLength / 2,
       upperRightArm.position[1],
