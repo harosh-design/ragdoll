@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Ragdoll Volley - Scene</title>
+    <style>
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      body { overflow: hidden; background: #1a1a2e; font-family: system-ui, sans-serif; }
+      #app { display: flex; justify-content: center; align-items: center; min-height: 100vh; position: relative; }
+      canvas { display: block; background: #16213e; }
+      .settings-panel {
+        position: fixed;
+        top: 0;
+        right: 0;
+        width: 220px;
+        height: 100vh;
+        background: rgba(15, 52, 96, 0.95);
+        color: #eee;
+        padding: 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        border-left: 1px solid #0f3460;
+      }
+      .settings-panel h3 { font-size: 1rem; margin-bottom: 8px; }
+      .controls-hint { font-size: 0.8rem; opacity: 0.9; margin-bottom: 12px; line-height: 1.3; }
+      .setting-row {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px;
+      }
+      .setting-row label { flex: 0 0 100%; font-size: 0.85rem; }
+      .setting-value { min-width: 2.5rem; font-size: 0.9rem; }
+      .setting-row input[type="range"] { flex: 1; min-width: 0; }
+      .settings-save {
+        margin-top: auto;
+        padding: 8px 12px;
+        background: #e94560;
+        color: #fff;
+        border: none;
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 0.9rem;
+      }
+      .settings-save:hover { background: #ff6b6b; }
+    </style>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

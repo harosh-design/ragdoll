@@ -1,0 +1,17 @@
+{
+  "name": "ragdoll-volley",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "p2-es": "^1.2.3"
+  },
+  "devDependencies": {
+    "vite": "^6.0.0"
+  }
+}
