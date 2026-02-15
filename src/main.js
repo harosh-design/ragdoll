@@ -88,23 +88,25 @@ ceilingShape.collisionGroup = GROUND
 ceilingShape.collisionMask = BODYPARTS | OTHER
 world.addBody(ceiling)
 
+// Мяч в стиле TapBall (p2-es restitution demo): упругий, без затухания
 const BALL_RADIUS = 0.25
-const ballShape = new p2.Circle({ radius: BALL_RADIUS })
-ballShape.collisionGroup = OTHER
-// В руке — без коллизии с куклой, чтобы рука не отлетала при касании тела
-ballShape.collisionMask = GROUND
 const ballMaterial = new p2.Material()
-ballShape.material = ballMaterial
+const ballShape = new p2.Circle({ radius: BALL_RADIUS, material: ballMaterial })
+ballShape.collisionGroup = OTHER
+ballShape.collisionMask = GROUND
 
 const ballContactMaterial = new p2.ContactMaterial(ballMaterial, world.defaultMaterial, {
-  restitution: getSettings().ballRestitution ?? 0.5,
+  restitution: getSettings().ballRestitution ?? 0.9,
+  stiffness: Number.MAX_VALUE,
 })
 world.addContactMaterial(ballContactMaterial)
 
 const ball = new p2.Body({
-  mass: 0.2,
+  mass: 1,
   position: [0, 0],
   type: p2.Body.DYNAMIC,
+  damping: 0,
+  angularDamping: 0,
 })
 ball.addShape(ballShape)
 ball.gravityScale = 0
@@ -144,11 +146,11 @@ window.addEventListener('keydown', (e) => {
   if (e.code === 'KeyR' && ballHeld) {
     ballHeld = false
     ballShape.collisionMask = GROUND | BODYPARTS
-    const speed = 14
-    const angleDeg = 30
+    const speed = getSettings().throwSpeed ?? 20
+    const angleDeg = getSettings().throwAngle ?? 0
     const angleRad = (angleDeg * Math.PI) / 180
-    ball.velocity[0] = speed * Math.cos(angleRad)
-    ball.velocity[1] = speed * Math.sin(angleRad)
+    ball.velocity[0] = speed * Math.sin(angleRad)
+    ball.velocity[1] = speed * Math.cos(angleRad)
   }
 })
 

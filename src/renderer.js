@@ -114,7 +114,7 @@ export function render(ctx, world, size, scale = 100, opts = {}) {
     }
   }
 
-  // Мяч поверх ладони и руки
+  // Мяч в стиле TapBall: градиент, блик
   for (let i = 0; i < world.bodies.length; i++) {
     const body = world.bodies[i]
     if (!body.isBall) continue
@@ -125,14 +125,19 @@ export function render(ctx, world, size, scale = 100, opts = {}) {
       if (shape.type === p2.Shape.CIRCLE) {
         const r = shape.radius
         const c = toCanvas(pos[0], pos[1], scale, centerX, centerY)
+        const rPx = scale * r
         ctx.save()
         ctx.translate(c.x, c.y)
         ctx.rotate(-angle)
+        const gradient = ctx.createRadialGradient(-rPx * 0.3, -rPx * 0.3, 0, 0, 0, rPx)
+        gradient.addColorStop(0, '#fff5e0')
+        gradient.addColorStop(0.4, '#ffc107')
+        gradient.addColorStop(1, '#e65100')
         ctx.beginPath()
-        ctx.arc(0, 0, scale * r, 0, Math.PI * 2)
-        ctx.fillStyle = '#ffc107'
+        ctx.arc(0, 0, rPx, 0, Math.PI * 2)
+        ctx.fillStyle = gradient
         ctx.fill()
-        ctx.strokeStyle = '#e65100'
+        ctx.strokeStyle = '#b33d00'
         ctx.lineWidth = 2
         ctx.stroke()
         ctx.restore()
