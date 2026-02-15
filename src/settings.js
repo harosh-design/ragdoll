@@ -10,6 +10,7 @@ const defaults = {
   jumpImpulse: 40,
   moveForce: 40,
   bounceDamping: 0.8,
+  playerBounceStrength: 0.45,
   ballSize: 0.3,
   movementSpeed: 1.2,
 }
@@ -79,7 +80,7 @@ export function initSettingsPanel() {
 
   const panel = document.createElement('aside')
   panel.className = 'settings-panel'
-  panel.innerHTML = '<h3>Настройки</h3><p class="controls-hint">Управление: W — прыжок, A — влево, D — вправо, R — бросок мяча</p>'
+  panel.innerHTML = '<h3>Настройки</h3><p class="controls-hint">Игрок 1 (слева): W — прыжок, A/D — влево/вправо, R — бросок.<br>Игрок 2 (справа): ↑ — прыжок, ←/→ — влево/вправо, Enter — бросок.</p>'
 
   panel.appendChild(
     slider(
@@ -145,6 +146,17 @@ export function initSettingsPanel() {
       0.05,
       () => current.bounceDamping,
       (v) => { current.bounceDamping = v }
+    )
+  )
+  panel.appendChild(
+    slider(
+      'playerBounceStrength',
+      'Отскок от игрока (0–1)',
+      0,
+      1,
+      0.05,
+      () => current.playerBounceStrength,
+      (v) => { current.playerBounceStrength = v }
     )
   )
   panel.appendChild(

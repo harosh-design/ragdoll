@@ -22,12 +22,24 @@ function toCanvas(x, y, scale, centerX, centerY) {
  * @param {p2.World} world
  * @param {{ width: number, height: number }} size - canvas size
  * @param {number} scale - pixels per physics unit (e.g. 100)
- * @param {{ head?: p2.Body, faceImage?: HTMLImageElement, upperBody?: p2.Body, torsoImage?: HTMLImageElement, pelvis?: p2.Body, pelvisImage?: HTMLImageElement }} [opts]
+ * @param {{ ragdolls?: Array<{ head: p2.Body, upperBody: p2.Body, pelvis: p2.Body, lowerLeftArm: p2.Body, lowerRightArm: p2.Body }>, faceImage?: HTMLImageElement, torsoImage?: HTMLImageElement, pelvisImage?: HTMLImageElement, worldBottom?: number }} [opts]
  */
 export function render(ctx, world, size, scale = 100, opts = {}) {
-  const { head: headBody, faceImage, upperBody: upperBodyRef, torsoImage, pelvis: pelvisRef, pelvisImage, lowerLeftArm, lowerRightArm, worldBottom } = opts
+  const { ragdolls = [], faceImage, torsoImage, pelvisImage, worldBottom } = opts
   const centerX = size.width / 2
   const centerY = size.height / 2
+
+  function getRagdollRefs(body) {
+    for (let r = 0; r < ragdolls.length; r++) {
+      const rd = ragdolls[r]
+      if (body === rd.head) return { head: rd.head, faceImage }
+      if (body === rd.upperBody) return { upperBody: rd.upperBody, torsoImage }
+      if (body === rd.pelvis) return { pelvis: rd.pelvis, pelvisImage }
+      if (body === rd.lowerLeftArm) return { arm: body, sign: -1 }
+      if (body === rd.lowerRightArm) return { arm: body, sign: 1 }
+    }
+    return null
+  }
 
   ctx.fillStyle = '#16213e'
   ctx.fillRect(0, 0, size.width, size.height)
@@ -48,12 +60,13 @@ export function render(ctx, world, size, scale = 100, opts = {}) {
     const pos = body.interpolatedPosition ?? body.position
     const angle = body.interpolatedAngle ?? body.angle
 
+    const refs = getRagdollRefs(body)
     for (let j = 0; j < body.shapes.length; j++) {
       const shape = body.shapes[j]
       if (shape.type === p2.Shape.CIRCLE) {
         const r = shape.radius
         const c = toCanvas(pos[0], pos[1], scale, centerX, centerY)
-        const isHead = headBody === body && faceImage && faceImage.complete
+        const isHead = refs && refs.head === body && faceImage && faceImage.complete
         if (isHead) {
           drawHeadFace(ctx, c.x, c.y, -angle, r * scale, faceImage)
         } else if (body.isWeight) {
@@ -78,14 +91,13 @@ export function render(ctx, world, size, scale = 100, opts = {}) {
         const oy = shape.position ? shape.position[1] : 0
         const oa = shape.angle || 0
         const boxAngle = angle + oa
-        const isTorso = upperBodyRef === body && torsoImage && torsoImage.complete
-        const isPelvis = pelvisRef === body && pelvisImage && pelvisImage.complete
+        const isTorso = refs && refs.upperBody === body && torsoImage && torsoImage.complete
+        const isPelvis = refs && refs.pelvis === body && pelvisImage && pelvisImage.complete
         if (isTorso || isPelvis) {
           const img = isTorso ? torsoImage : pelvisImage
           drawBoxWithTexture(ctx, pos, boxAngle, shape, scale, centerX, centerY, img)
-        } else if (body === lowerLeftArm || body === lowerRightArm) {
-          const sign = body === lowerRightArm ? 1 : -1
-          drawArmWithHand(ctx, pos, boxAngle, shape, scale, centerX, centerY, sign)
+        } else if (refs && refs.arm === body) {
+          drawArmWithHand(ctx, pos, boxAngle, shape, scale, centerX, centerY, refs.sign)
         } else {
           const cos = Math.cos(boxAngle)
           const sin = Math.sin(boxAngle)

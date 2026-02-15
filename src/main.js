@@ -26,6 +26,8 @@ export const WORLD_TOP = 14
 
 const BALL_BOUNCE_IMPULSE_LOSS = 0.25
 const pendingBallBounces = []
+/** After ball hits ground, give to this player for next serve. */
+let ballRespawnFor = null
 
 const canvas = document.createElement('canvas')
 const ctx = canvas.getContext('2d')
@@ -118,33 +120,62 @@ ball.squashX = 1
 ball.squashY = 1
 world.addBody(ball)
 
+/** Tracks who last had the ball in flight, for alternating respawn. */
+let lastThrowBy = 'p1'
+
 world.on('beginContact', (ev) => {
   const { bodyA, bodyB, contactEquations } = ev
   if (contactEquations.length === 0) return
   const isBallVsStatic =
     (bodyA.isBall && bodyB.type === p2.Body.STATIC) ||
     (bodyB.isBall && bodyA.type === p2.Body.STATIC)
-  if (!isBallVsStatic) return
+  const isBallVsPlayer =
+    (bodyA.isBall && bodyB.type === p2.Body.DYNAMIC && !bodyB.isBall) ||
+    (bodyB.isBall && bodyA.type === p2.Body.DYNAMIC && !bodyA.isBall)
+  if (!isBallVsStatic && !isBallVsPlayer) return
   const ballBody = bodyA.isBall ? bodyA : bodyB
+  const otherBody = bodyA.isBall ? bodyB : bodyA
   const eq = contactEquations[0]
   const normalA = eq.normalA
+  // Normal pointing away from ball (into the other body)
   const n = bodyA.isBall
     ? [-normalA[0], -normalA[1]]
     : [normalA[0], normalA[1]]
-  const velocityAtImpact = [ballBody.velocity[0], ballBody.velocity[1]]
-  pendingBallBounces.push({ ballBody, normal: n, velocityAtImpact })
+  // For player bodies: use relative velocity (ball minus player part)
+  // For static bodies: player velocity is [0,0], so it's just ball velocity
+  const otherVel = otherBody.type === p2.Body.STATIC
+    ? [0, 0]
+    : [otherBody.velocity[0], otherBody.velocity[1]]
+  const relVelocity = [
+    ballBody.velocity[0] - otherVel[0],
+    ballBody.velocity[1] - otherVel[1],
+  ]
+  const bounceStrength = isBallVsPlayer
+    ? (getSettings().playerBounceStrength ?? 0.45)
+    : 1
+  pendingBallBounces.push({
+    ballBody, normal: n, relVelocity, otherVel, bounceStrength,
+  })
+  const hitFloor = (bodyA.isBall && bodyB === plane) || (bodyB.isBall && bodyA === plane)
+  if (hitFloor && ballHeldBy === null) {
+    ballRespawnFor = lastThrowBy === 'p1' ? 'p2' : 'p1'
+  }
 })
 
 world.on('postStep', () => {
   const s = getSettings()
-  const bounceCoeff = (s.bounceDamping ?? 0.8) * (1 - BALL_BOUNCE_IMPULSE_LOSS)
-  for (const { ballBody, normal: n, velocityAtImpact: v } of pendingBallBounces) {
-    const dot = v[0] * n[0] + v[1] * n[1]
-    const vNormalX = dot * n[0]
-    const vNormalY = dot * n[1]
-    ballBody.velocity[0] = v[0] - vNormalX - bounceCoeff * vNormalX
-    ballBody.velocity[1] = v[1] - vNormalY - bounceCoeff * vNormalY
-    const impactForce = Math.min(Math.abs(dot) / 10, 1)
+  const baseBounceCoeff = (s.bounceDamping ?? 0.8) * (1 - BALL_BOUNCE_IMPULSE_LOSS)
+  for (const { ballBody, normal: n, relVelocity: rv, otherVel, bounceStrength = 1 } of pendingBallBounces) {
+    const bounceCoeff = baseBounceCoeff * bounceStrength
+    // Reflect the relative velocity in the contact normal
+    const dot = rv[0] * n[0] + rv[1] * n[1]
+    const rvNormalX = dot * n[0]
+    const rvNormalY = dot * n[1]
+    // Reflected relative velocity + add back other body's velocity
+    ballBody.velocity[0] = rv[0] - rvNormalX - bounceCoeff * rvNormalX + otherVel[0]
+    ballBody.velocity[1] = rv[1] - rvNormalY - bounceCoeff * rvNormalY + otherVel[1]
+    // Squash/stretch effect (based on relative impact force)
+    const impactForce = Math.min(Math.abs(dot) / 10, 1) * bounceStrength
     const isVertical = Math.abs(n[1]) > Math.abs(n[0])
     if (isVertical) {
       ballBody.squashX = 1 + impactForce * 0.3
@@ -158,23 +189,37 @@ world.on('postStep', () => {
 })
 
 const lastGoodPosition = new WeakMap()
-const ragdoll = createRagdoll(world, WORLD_BOTTOM)
 
-// Ладонь правой руки = конец предплечья (local +x у lowerRightArm)
-const lowerRightArmShape = ragdoll.lowerRightArm.shapes[0]
-const handPivotX = lowerRightArmShape.width / 2
+// Player 1 left side, Player 2 right side
+const ragdoll1 = createRagdoll(world, WORLD_BOTTOM, WORLD_LEFT + 4)
+const ragdoll2 = createRagdoll(world, WORLD_BOTTOM, WORLD_RIGHT - 4)
+
+// Hand pivot: right arm tip = +width/2, left arm tip = -width/2
+const lowerRightArmShape = ragdoll1.lowerRightArm.shapes[0]
+const handPivotXRight = lowerRightArmShape.width / 2
+const handPivotXLeft = -lowerRightArmShape.width / 2
 const BALL_OFFSET_Y = -0.06
 
-let ballHeld = true
+/** 'p1' | 'p2' | null when in flight */
+let ballHeldBy = 'p1'
 
-// Place ball at hand for first frame (чуть ниже ладони)
-const hand = ragdoll.lowerRightArm
-const a = hand.angle ?? 0
-const hx = hand.position[0] + handPivotX * Math.cos(a)
-const hy = hand.position[1] + handPivotX * Math.sin(a) + BALL_OFFSET_Y
-ball.position[0] = hx
-ball.position[1] = hy
-for (const body of ragdoll.bodies) {
+function placeBallAtHand(ragdoll, useRightHand) {
+  const arm = useRightHand ? ragdoll.lowerRightArm : ragdoll.lowerLeftArm
+  const pivotX = useRightHand ? handPivotXRight : handPivotXLeft
+  const a = arm.angle ?? 0
+  ball.position[0] = arm.position[0] + pivotX * Math.cos(a)
+  ball.position[1] = arm.position[1] + pivotX * Math.sin(a) + BALL_OFFSET_Y
+}
+
+// Initial serve: ball at Player 1's right hand
+placeBallAtHand(ragdoll1, true)
+for (const body of ragdoll1.bodies) {
+  const p = body.position
+  if (p != null && (p[0] != null || p.x != null) && (p[1] != null || p.y != null)) {
+    lastGoodPosition.set(body, [Number(p[0] ?? p.x ?? 0), Number(p[1] ?? p.y ?? 0)])
+  }
+}
+for (const body of ragdoll2.bodies) {
   const p = body.position
   if (p != null && (p[0] != null || p.x != null) && (p[1] != null || p.y != null)) {
     lastGoodPosition.set(body, [Number(p[0] ?? p.x ?? 0), Number(p[1] ?? p.y ?? 0)])
@@ -187,13 +232,24 @@ initControls()
 initSettingsPanel()
 
 window.addEventListener('keydown', (e) => {
-  if (e.code === 'KeyR' && ballHeld) {
-    ballHeld = false
+  if (e.code === 'KeyR' && ballHeldBy === 'p1') {
+    ballHeldBy = null
+    lastThrowBy = 'p1'
     ballShape.collisionMask = GROUND | BODYPARTS
     const speed = getSettings().throwSpeed ?? 20
     const angleDeg = getSettings().throwAngle ?? 0
     const angleRad = (angleDeg * Math.PI) / 180
     ball.velocity[0] = speed * Math.sin(angleRad)
+    ball.velocity[1] = speed * Math.cos(angleRad)
+  }
+  if (e.code === 'Enter' && ballHeldBy === 'p2') {
+    ballHeldBy = null
+    lastThrowBy = 'p2'
+    ballShape.collisionMask = GROUND | BODYPARTS
+    const speed = getSettings().throwSpeed ?? 20
+    const angleDeg = getSettings().throwAngle ?? 0
+    const angleRad = (angleDeg * Math.PI) / 180
+    ball.velocity[0] = -speed * Math.sin(angleRad)
     ball.velocity[1] = speed * Math.cos(angleRad)
   }
 })
@@ -259,32 +315,48 @@ function gameLoop(now) {
 
   const s = getSettings()
   world.gravity[1] = -s.gravityY
-  const ragdollBottom = getRagdollBottom(ragdoll)
-  const isOnGround = ragdollBottom <= WORLD_BOTTOM + 0.25
-  applyControls(ragdoll, s, { isOnGround })
+  const ragdoll1Bottom = getRagdollBottom(ragdoll1)
+  const ragdoll2Bottom = getRagdollBottom(ragdoll2)
+  applyControls(ragdoll1, s, { isOnGround: ragdoll1Bottom <= WORLD_BOTTOM + 0.25 }, 'p1')
+  applyControls(ragdoll2, s, { isOnGround: ragdoll2Bottom <= WORLD_BOTTOM + 0.25 }, 'p2')
 
   while (accumulator >= FIXED_DT) {
-    // Постоянная сила вверх на голову
     const headLift = s.headLiftForce ?? 0
     if (headLift > 0) {
-      ragdoll.head.applyForce([0, headLift])
+      ragdoll1.head.applyForce([0, headLift])
+      ragdoll2.head.applyForce([0, headLift])
     }
-    // Гравитация мяча (свой параметр, мяч не использует world.gravity из-за gravityScale = 0)
-    if (!ballHeld) {
+    if (ballHeldBy == null) {
       const gBall = s.ballGravity ?? s.gravityY
       ball.applyForce([0, -ball.mass * gBall])
     }
     world.step(FIXED_DT)
-    // Кинематическое крепление мяча к ладони (после step — актуальная позиция руки, чуть ниже)
-    if (ballHeld) {
-      const arm = ragdoll.lowerRightArm
+    if (ballHeldBy === 'p1') {
+      const arm = ragdoll1.lowerRightArm
       const ang = arm.angle
-      const ax = arm.position[0]
-      const ay = arm.position[1]
-      ball.position[0] = ax + handPivotX * Math.cos(ang)
-      ball.position[1] = ay + handPivotX * Math.sin(ang) + BALL_OFFSET_Y
-      ball.velocity[0] = arm.velocity[0] - arm.angularVelocity * handPivotX * Math.sin(ang)
-      ball.velocity[1] = arm.velocity[1] + arm.angularVelocity * handPivotX * Math.cos(ang)
+      const pivotX = handPivotXRight
+      ball.position[0] = arm.position[0] + pivotX * Math.cos(ang)
+      ball.position[1] = arm.position[1] + pivotX * Math.sin(ang) + BALL_OFFSET_Y
+      ball.velocity[0] = arm.velocity[0] - arm.angularVelocity * pivotX * Math.sin(ang)
+      ball.velocity[1] = arm.velocity[1] + arm.angularVelocity * pivotX * Math.cos(ang)
+    } else if (ballHeldBy === 'p2') {
+      const arm = ragdoll2.lowerLeftArm
+      const ang = arm.angle
+      const pivotX = handPivotXLeft
+      ball.position[0] = arm.position[0] + pivotX * Math.cos(ang)
+      ball.position[1] = arm.position[1] + pivotX * Math.sin(ang) + BALL_OFFSET_Y
+      ball.velocity[0] = arm.velocity[0] - arm.angularVelocity * pivotX * Math.sin(ang)
+      ball.velocity[1] = arm.velocity[1] + arm.angularVelocity * pivotX * Math.cos(ang)
+    }
+    if (ballRespawnFor !== null) {
+      ballHeldBy = ballRespawnFor
+      ballRespawnFor = null
+      ball.velocity[0] = 0
+      ball.velocity[1] = 0
+      ball.angularVelocity = 0
+      ballShape.collisionMask = GROUND
+      if (ballHeldBy === 'p1') placeBallAtHand(ragdoll1, true)
+      else placeBallAtHand(ragdoll2, false)
     }
     accumulator -= FIXED_DT
   }
@@ -303,7 +375,7 @@ function gameLoop(now) {
       b.interpolatedAngle = prevAngle + alpha * (angle - prevAngle)
     }
   }
-  if (!ballHeld) {
+  if (ballHeldBy == null) {
     ball.squashX += (1 - ball.squashX) * 0.2
     ball.squashY += (1 - ball.squashY) * 0.2
   } else {
@@ -314,16 +386,27 @@ function gameLoop(now) {
   if (ballShape.radius !== ballRadiusSetting) ballShape.radius = ballRadiusSetting
 
   render(ctx, world, size, SCALE, {
-  head: ragdoll.head,
-  faceImage,
-  upperBody: ragdoll.upperBody,
-  torsoImage,
-  pelvis: ragdoll.pelvis,
-  pelvisImage,
-  lowerLeftArm: ragdoll.lowerLeftArm,
-  lowerRightArm: ragdoll.lowerRightArm,
-  worldBottom: WORLD_BOTTOM,
-})
+    ragdolls: [
+      {
+        head: ragdoll1.head,
+        upperBody: ragdoll1.upperBody,
+        pelvis: ragdoll1.pelvis,
+        lowerLeftArm: ragdoll1.lowerLeftArm,
+        lowerRightArm: ragdoll1.lowerRightArm,
+      },
+      {
+        head: ragdoll2.head,
+        upperBody: ragdoll2.upperBody,
+        pelvis: ragdoll2.pelvis,
+        lowerLeftArm: ragdoll2.lowerLeftArm,
+        lowerRightArm: ragdoll2.lowerRightArm,
+      },
+    ],
+    faceImage,
+    torsoImage,
+    pelvisImage,
+    worldBottom: WORLD_BOTTOM,
+  })
 }
 
 requestAnimationFrame(gameLoop)
