@@ -24,6 +24,9 @@ export const WORLD_RIGHT = 10
 export const WORLD_BOTTOM = -4
 export const WORLD_TOP = 14
 
+const BALL_BOUNCE_IMPULSE_LOSS = 0.25
+const pendingBallBounces = []
+
 const canvas = document.createElement('canvas')
 const ctx = canvas.getContext('2d')
 const app = document.querySelector('#app')
@@ -96,7 +99,7 @@ ballShape.collisionGroup = OTHER
 ballShape.collisionMask = GROUND
 
 const ballContactMaterial = new p2.ContactMaterial(ballMaterial, world.defaultMaterial, {
-  restitution: getSettings().ballRestitution ?? 0.9,
+  restitution: 0,
   stiffness: Number.MAX_VALUE,
 })
 world.addContactMaterial(ballContactMaterial)
@@ -111,7 +114,48 @@ const ball = new p2.Body({
 ball.addShape(ballShape)
 ball.gravityScale = 0
 ball.isBall = true
+ball.squashX = 1
+ball.squashY = 1
 world.addBody(ball)
+
+world.on('beginContact', (ev) => {
+  const { bodyA, bodyB, contactEquations } = ev
+  if (contactEquations.length === 0) return
+  const isBallVsStatic =
+    (bodyA.isBall && bodyB.type === p2.Body.STATIC) ||
+    (bodyB.isBall && bodyA.type === p2.Body.STATIC)
+  if (!isBallVsStatic) return
+  const ballBody = bodyA.isBall ? bodyA : bodyB
+  const eq = contactEquations[0]
+  const normalA = eq.normalA
+  const n = bodyA.isBall
+    ? [-normalA[0], -normalA[1]]
+    : [normalA[0], normalA[1]]
+  const velocityAtImpact = [ballBody.velocity[0], ballBody.velocity[1]]
+  pendingBallBounces.push({ ballBody, normal: n, velocityAtImpact })
+})
+
+world.on('postStep', () => {
+  const s = getSettings()
+  const bounceCoeff = (s.bounceDamping ?? 0.8) * (1 - BALL_BOUNCE_IMPULSE_LOSS)
+  for (const { ballBody, normal: n, velocityAtImpact: v } of pendingBallBounces) {
+    const dot = v[0] * n[0] + v[1] * n[1]
+    const vNormalX = dot * n[0]
+    const vNormalY = dot * n[1]
+    ballBody.velocity[0] = v[0] - vNormalX - bounceCoeff * vNormalX
+    ballBody.velocity[1] = v[1] - vNormalY - bounceCoeff * vNormalY
+    const impactForce = Math.min(Math.abs(dot) / 10, 1)
+    const isVertical = Math.abs(n[1]) > Math.abs(n[0])
+    if (isVertical) {
+      ballBody.squashX = 1 + impactForce * 0.3
+      ballBody.squashY = 1 - impactForce * 0.3
+    } else {
+      ballBody.squashX = 1 - impactForce * 0.3
+      ballBody.squashY = 1 + impactForce * 0.3
+    }
+  }
+  pendingBallBounces.length = 0
+})
 
 const lastGoodPosition = new WeakMap()
 const ragdoll = createRagdoll(world, WORLD_BOTTOM)
@@ -215,7 +259,6 @@ function gameLoop(now) {
 
   const s = getSettings()
   world.gravity[1] = -s.gravityY
-  ballContactMaterial.restitution = s.ballRestitution ?? 0.5
   const ragdollBottom = getRagdollBottom(ragdoll)
   const isOnGround = ragdollBottom <= WORLD_BOTTOM + 0.25
   applyControls(ragdoll, s, { isOnGround })
@@ -260,6 +303,15 @@ function gameLoop(now) {
       b.interpolatedAngle = prevAngle + alpha * (angle - prevAngle)
     }
   }
+  if (!ballHeld) {
+    ball.squashX += (1 - ball.squashX) * 0.2
+    ball.squashY += (1 - ball.squashY) * 0.2
+  } else {
+    ball.squashX = 1
+    ball.squashY = 1
+  }
+  const ballRadiusSetting = s.ballSize ?? 0.25
+  if (ballShape.radius !== ballRadiusSetting) ballShape.radius = ballRadiusSetting
 
   render(ctx, world, size, SCALE, {
   head: ragdoll.head,
@@ -270,6 +322,7 @@ function gameLoop(now) {
   pelvisImage,
   lowerLeftArm: ragdoll.lowerLeftArm,
   lowerRightArm: ragdoll.lowerRightArm,
+  worldBottom: WORLD_BOTTOM,
 })
 }
 

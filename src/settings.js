@@ -9,6 +9,9 @@ const defaults = {
   ballRestitution: 2,
   jumpImpulse: 40,
   moveForce: 40,
+  bounceDamping: 0.8,
+  ballSize: 0.3,
+  movementSpeed: 1.2,
 }
 
 let current = { ...defaults }
@@ -131,6 +134,39 @@ export function initSettingsPanel() {
       0.5,
       () => current.ballGravity,
       (v) => { current.ballGravity = v }
+    )
+  )
+  panel.appendChild(
+    slider(
+      'bounceDamping',
+      'Эластичность',
+      0.1,
+      1,
+      0.05,
+      () => current.bounceDamping,
+      (v) => { current.bounceDamping = v }
+    )
+  )
+  panel.appendChild(
+    slider(
+      'ballSize',
+      'Размер мяча',
+      0.15,
+      0.5,
+      0.05,
+      () => current.ballSize,
+      (v) => { current.ballSize = v }
+    )
+  )
+  panel.appendChild(
+    slider(
+      'movementSpeed',
+      'Скорость движения',
+      0.5,
+      3,
+      0.1,
+      () => current.movementSpeed,
+      (v) => { current.movementSpeed = v }
     )
   )
   panel.appendChild(

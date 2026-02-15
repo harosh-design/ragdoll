@@ -33,7 +33,7 @@ export function initControls() {
  */
 export function applyControls(ragdoll, settings, context) {
   const { pelvis, upperBody, head } = ragdoll
-  const moveForce = settings.moveForce
+  const moveForce = settings.moveForce ?? (settings.movementSpeed != null ? settings.movementSpeed * 33 : 40)
   const jumpImpulse = settings.jumpImpulse
   const isOnGround = context?.isOnGround ?? true
   if (isOnGround && wasInAir) {

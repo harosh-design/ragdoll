@@ -25,7 +25,7 @@ function toCanvas(x, y, scale, centerX, centerY) {
  * @param {{ head?: p2.Body, faceImage?: HTMLImageElement, upperBody?: p2.Body, torsoImage?: HTMLImageElement, pelvis?: p2.Body, pelvisImage?: HTMLImageElement }} [opts]
  */
 export function render(ctx, world, size, scale = 100, opts = {}) {
-  const { head: headBody, faceImage, upperBody: upperBodyRef, torsoImage, pelvis: pelvisRef, pelvisImage, lowerLeftArm, lowerRightArm } = opts
+  const { head: headBody, faceImage, upperBody: upperBodyRef, torsoImage, pelvis: pelvisRef, pelvisImage, lowerLeftArm, lowerRightArm, worldBottom } = opts
   const centerX = size.width / 2
   const centerY = size.height / 2
 
@@ -114,7 +114,8 @@ export function render(ctx, world, size, scale = 100, opts = {}) {
     }
   }
 
-  // Мяч в стиле TapBall: градиент, блик
+  // Мяч как в Interactive Bouncing Ball: градиент, блик, squash/stretch, тень
+  const floorY = worldBottom != null ? centerY - scale * worldBottom : centerY + scale * 4
   for (let i = 0; i < world.bodies.length; i++) {
     const body = world.bodies[i]
     if (!body.isBall) continue
@@ -126,20 +127,33 @@ export function render(ctx, world, size, scale = 100, opts = {}) {
         const r = shape.radius
         const c = toCanvas(pos[0], pos[1], scale, centerX, centerY)
         const rPx = scale * r
+        const squashX = body.squashX ?? 1
+        const squashY = body.squashY ?? 1
+        const shadowOpacity = Math.max(0, 1 - (floorY - c.y - rPx) / (scale * 3))
+        const shadowWidth = rPx * 1.5 * (1 + shadowOpacity * 0.5)
+        ctx.fillStyle = `rgba(0, 0, 0, ${shadowOpacity * 0.3})`
+        ctx.beginPath()
+        ctx.ellipse(c.x, floorY + 5, shadowWidth, shadowWidth * 0.3, 0, 0, Math.PI * 2)
+        ctx.fill()
         ctx.save()
         ctx.translate(c.x, c.y)
         ctx.rotate(-angle)
-        const gradient = ctx.createRadialGradient(-rPx * 0.3, -rPx * 0.3, 0, 0, 0, rPx)
-        gradient.addColorStop(0, '#fff5e0')
-        gradient.addColorStop(0.4, '#ffc107')
-        gradient.addColorStop(1, '#e65100')
+        ctx.scale(squashX, squashY)
+        const gradient = ctx.createRadialGradient(
+          -rPx * 0.3, -rPx * 0.3, 0,
+          0, 0, rPx
+        )
+        gradient.addColorStop(0, '#fbbf24')
+        gradient.addColorStop(0.7, '#f59e0b')
+        gradient.addColorStop(1, '#d97706')
+        ctx.fillStyle = gradient
         ctx.beginPath()
         ctx.arc(0, 0, rPx, 0, Math.PI * 2)
-        ctx.fillStyle = gradient
         ctx.fill()
-        ctx.strokeStyle = '#b33d00'
-        ctx.lineWidth = 2
-        ctx.stroke()
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.4)'
+        ctx.beginPath()
+        ctx.arc(-rPx * 0.3, -rPx * 0.3, rPx * 0.4, 0, Math.PI * 2)
+        ctx.fill()
         ctx.restore()
       }
     }
