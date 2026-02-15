@@ -25,29 +25,49 @@ function toCanvas(x, y, scale, centerX, centerY) {
  * @param {{ ragdolls?: Array<{ head: p2.Body, upperBody: p2.Body, pelvis: p2.Body, lowerLeftArm: p2.Body, lowerRightArm: p2.Body }>, faceImage?: HTMLImageElement, torsoImage?: HTMLImageElement, pelvisImage?: HTMLImageElement, worldBottom?: number }} [opts]
  */
 export function render(ctx, world, size, scale = 100, opts = {}) {
-  const { ragdolls = [], faceImage, torsoImage, pelvisImage, worldBottom } = opts
+  const { ragdolls = [], faceImage, torsoImage, pelvisImage, worldBottom, netHeight } = opts
   const centerX = size.width / 2
   const centerY = size.height / 2
+  const playerColors = ['#e94560', '#2563eb'] // red (p1), blue (p2)
+  const playerStrokeColors = ['#0f3460', '#1e3a5f']
 
   function getRagdollRefs(body) {
     for (let r = 0; r < ragdolls.length; r++) {
       const rd = ragdolls[r]
-      if (body === rd.head) return { head: rd.head, faceImage }
-      if (body === rd.upperBody) return { upperBody: rd.upperBody, torsoImage }
-      if (body === rd.pelvis) return { pelvis: rd.pelvis, pelvisImage }
-      if (body === rd.lowerLeftArm) return { arm: body, sign: -1 }
-      if (body === rd.lowerRightArm) return { arm: body, sign: 1 }
+      const playerColor = playerColors[r]
+      const strokeColor = playerStrokeColors[r]
+      if (body === rd.head) return { head: rd.head, faceImage, playerIndex: r, playerColor, strokeColor }
+      if (body === rd.upperBody) return { upperBody: rd.upperBody, torsoImage, playerIndex: r, playerColor, strokeColor }
+      if (body === rd.pelvis) return { pelvis: rd.pelvis, pelvisImage, playerIndex: r, playerColor, strokeColor }
+      if (body === rd.lowerLeftArm) return { arm: body, sign: -1, playerIndex: r, playerColor, strokeColor }
+      if (body === rd.lowerRightArm) return { arm: body, sign: 1, playerIndex: r, playerColor, strokeColor }
     }
     return null
   }
 
-  ctx.fillStyle = '#16213e'
-  ctx.fillRect(0, 0, size.width, size.height)
+  // Split field: left half red tint, right half blue tint
+  ctx.fillStyle = '#2a1628'
+  ctx.fillRect(0, 0, size.width / 2, size.height)
+  ctx.fillStyle = '#16202a'
+  ctx.fillRect(size.width / 2, 0, size.width / 2, size.height)
 
+  function drawScene(clipLeftHalf) {
+    if (clipLeftHalf) {
+      ctx.save()
+      ctx.beginPath()
+      ctx.rect(0, 0, size.width / 2, size.height)
+      ctx.clip()
+    } else {
+      ctx.save()
+      ctx.beginPath()
+      ctx.rect(size.width / 2, 0, size.width / 2, size.height)
+      ctx.clip()
+    }
   for (let i = 0; i < world.bodies.length; i++) {
     const body = world.bodies[i]
     if (body.isBall) continue
     if (body.type === p2.Body.STATIC) {
+      if (body.isNet) continue // Center net drawn as line after both halves
       const hasPlane = body.shapes.some((s) => s.type === p2.Shape.PLANE)
       if (hasPlane) {
         drawGround(ctx, body, scale, centerX, centerY, size)
@@ -68,7 +88,7 @@ export function render(ctx, world, size, scale = 100, opts = {}) {
         const c = toCanvas(pos[0], pos[1], scale, centerX, centerY)
         const isHead = refs && refs.head === body && faceImage && faceImage.complete
         if (isHead) {
-          drawHeadFace(ctx, c.x, c.y, -angle, r * scale, faceImage)
+          drawHeadFace(ctx, c.x, c.y, -angle, r * scale, faceImage, refs && refs.strokeColor)
         } else if (body.isWeight) {
           drawFoot(ctx, c.x, c.y, -angle, scale * r)
         } else {
@@ -77,9 +97,9 @@ export function render(ctx, world, size, scale = 100, opts = {}) {
           ctx.rotate(-angle)
           ctx.beginPath()
           ctx.arc(0, 0, scale * r, 0, Math.PI * 2)
-          ctx.fillStyle = '#e94560'
+          ctx.fillStyle = (refs && refs.playerColor) ? refs.playerColor : '#e94560'
           ctx.fill()
-          ctx.strokeStyle = '#0f3460'
+          ctx.strokeStyle = (refs && refs.strokeColor) ? refs.strokeColor : '#0f3460'
           ctx.lineWidth = 2
           ctx.stroke()
           ctx.restore()
@@ -97,7 +117,7 @@ export function render(ctx, world, size, scale = 100, opts = {}) {
           const img = isTorso ? torsoImage : pelvisImage
           drawBoxWithTexture(ctx, pos, boxAngle, shape, scale, centerX, centerY, img)
         } else if (refs && refs.arm === body) {
-          drawArmWithHand(ctx, pos, boxAngle, shape, scale, centerX, centerY, refs.sign)
+          drawArmWithHand(ctx, pos, boxAngle, shape, scale, centerX, centerY, refs.sign, refs.playerColor, refs.strokeColor)
         } else {
           const cos = Math.cos(boxAngle)
           const sin = Math.sin(boxAngle)
@@ -116,9 +136,9 @@ export function render(ctx, world, size, scale = 100, opts = {}) {
             else ctx.lineTo(p.x, p.y)
           }
           ctx.closePath()
-          ctx.fillStyle = '#e94560'
+          ctx.fillStyle = (refs && refs.playerColor) ? refs.playerColor : '#e94560'
           ctx.fill()
-          ctx.strokeStyle = '#0f3460'
+          ctx.strokeStyle = (refs && refs.strokeColor) ? refs.strokeColor : '#0f3460'
           ctx.lineWidth = 2
           ctx.stroke()
         }
@@ -170,6 +190,23 @@ export function render(ctx, world, size, scale = 100, opts = {}) {
       }
     }
   }
+    ctx.restore()
+  }
+  drawScene(true)
+  drawScene(false)
+
+  // Center division (net): shorter so ball can fly over; only from ground up to netHeight
+  const netX = size.width / 2
+  const netBottomY = centerY - scale * (worldBottom ?? 0)
+  const netTopY = netHeight != null
+    ? centerY - scale * ((worldBottom ?? 0) + netHeight)
+    : 0
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.95)'
+  ctx.lineWidth = 4
+  ctx.beginPath()
+  ctx.moveTo(netX, netTopY)
+  ctx.lineTo(netX, netBottomY)
+  ctx.stroke()
 }
 
 /**
@@ -181,7 +218,7 @@ export function render(ctx, world, size, scale = 100, opts = {}) {
  * @param {number} radiusPx - head radius in pixels
  * @param {HTMLImageElement} img
  */
-function drawHeadFace(ctx, cx, cy, angle, radiusPx, img) {
+function drawHeadFace(ctx, cx, cy, angle, radiusPx, img, strokeColor = '#0f3460') {
   const d = radiusPx * 2
   ctx.save()
   ctx.translate(cx, cy)
@@ -197,7 +234,7 @@ function drawHeadFace(ctx, cx, cy, angle, radiusPx, img) {
   ctx.rotate(angle)
   ctx.beginPath()
   ctx.arc(0, 0, radiusPx, 0, Math.PI * 2)
-  ctx.strokeStyle = '#0f3460'
+  ctx.strokeStyle = strokeColor
   ctx.lineWidth = 2
   ctx.stroke()
   ctx.restore()
@@ -246,7 +283,7 @@ function drawFoot(ctx, cx, cy, angle, radiusPx) {
 }
 
 /** Предплечье с ладонью на конце. */
-function drawArmWithHand(ctx, pos, boxAngle, shape, scale, centerX, centerY, sign) {
+function drawArmWithHand(ctx, pos, boxAngle, shape, scale, centerX, centerY, sign, playerColor = '#e94560', strokeColor = '#0f3460') {
   const hw = shape.width / 2
   const hh = shape.height / 2
   const ox = shape.position ? shape.position[0] : 0
@@ -269,9 +306,9 @@ function drawArmWithHand(ctx, pos, boxAngle, shape, scale, centerX, centerY, sig
     else ctx.lineTo(p.x, p.y)
   }
   ctx.closePath()
-  ctx.fillStyle = '#e94560'
+  ctx.fillStyle = playerColor
   ctx.fill()
-  ctx.strokeStyle = '#0f3460'
+  ctx.strokeStyle = strokeColor
   ctx.lineWidth = 2
   ctx.stroke()
 

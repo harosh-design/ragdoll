@@ -3,8 +3,8 @@ const STORAGE_KEY = 'ragdoll-volley-settings'
 const defaults = {
   gravityY: 6.5,
   headLiftForce: 50,
-  throwSpeed: 20,
-  throwAngle: 0,
+  throwSpeed: 14,
+  throwAngle: 45,
   ballGravity: 3.5,
   ballRestitution: 2,
   jumpImpulse: 40,
@@ -109,7 +109,7 @@ export function initSettingsPanel() {
       'throwSpeed',
       'Сила броска',
       1,
-      300,
+      40,
       1,
       () => current.throwSpeed,
       (v) => { current.throwSpeed = v }
@@ -118,9 +118,9 @@ export function initSettingsPanel() {
   panel.appendChild(
     slider(
       'throwAngle',
-      'Угол броска (°)',
-      -90,
-      90,
+      'Угол броска (°от горизонтали)',
+      5,
+      85,
       5,
       () => current.throwAngle,
       (v) => { current.throwAngle = v }

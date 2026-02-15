@@ -62,10 +62,11 @@ world.addBody(plane)
 
 const wallThickness = 0.5
 const wallHeight = WORLD_TOP - WORLD_BOTTOM + 1
+// Side walls at the edges of the screen (inner face at WORLD_LEFT / WORLD_RIGHT)
 const leftWallShape = new p2.Box({ width: wallThickness, height: wallHeight })
 const leftWall = new p2.Body({
   type: p2.Body.STATIC,
-  position: [WORLD_LEFT - wallThickness / 2, (WORLD_TOP + WORLD_BOTTOM) / 2],
+  position: [WORLD_LEFT + wallThickness / 2, (WORLD_TOP + WORLD_BOTTOM) / 2],
 })
 leftWall.addShape(leftWallShape)
 leftWallShape.collisionGroup = GROUND
@@ -75,12 +76,26 @@ world.addBody(leftWall)
 const rightWallShape = new p2.Box({ width: wallThickness, height: wallHeight })
 const rightWall = new p2.Body({
   type: p2.Body.STATIC,
-  position: [WORLD_RIGHT + wallThickness / 2, (WORLD_TOP + WORLD_BOTTOM) / 2],
+  position: [WORLD_RIGHT - wallThickness / 2, (WORLD_TOP + WORLD_BOTTOM) / 2],
 })
 rightWall.addShape(rightWallShape)
 rightWallShape.collisionGroup = GROUND
 rightWallShape.collisionMask = BODYPARTS | OTHER
 world.addBody(rightWall)
+
+// Center net: ~1/3 height so the ball can fly over it
+const netHeight = wallHeight / 3
+const centerWallShape = new p2.Box({ width: wallThickness, height: netHeight })
+const centerWall = new p2.Body({
+  type: p2.Body.STATIC,
+  position: [0, WORLD_BOTTOM + netHeight / 2],
+})
+centerWall.addShape(centerWallShape)
+centerWall.isNet = true
+centerWall.netHeight = netHeight // for renderer to draw net only this tall
+centerWallShape.collisionGroup = GROUND
+centerWallShape.collisionMask = BODYPARTS | OTHER
+world.addBody(centerWall)
 
 const ceilingWidth = WORLD_RIGHT - WORLD_LEFT + wallThickness * 2
 const ceilingShape = new p2.Box({ width: ceilingWidth, height: wallThickness })
@@ -236,21 +251,23 @@ window.addEventListener('keydown', (e) => {
     ballHeldBy = null
     lastThrowBy = 'p1'
     ballShape.collisionMask = GROUND | BODYPARTS
-    const speed = getSettings().throwSpeed ?? 20
-    const angleDeg = getSettings().throwAngle ?? 0
+    const speed = getSettings().throwSpeed ?? 14
+    const angleDeg = getSettings().throwAngle ?? 45
     const angleRad = (angleDeg * Math.PI) / 180
-    ball.velocity[0] = speed * Math.sin(angleRad)
-    ball.velocity[1] = speed * Math.cos(angleRad)
+    // P1 throws right (+x) and up (+y), angle measured from horizontal
+    ball.velocity[0] = speed * Math.cos(angleRad)
+    ball.velocity[1] = speed * Math.sin(angleRad)
   }
   if (e.code === 'Enter' && ballHeldBy === 'p2') {
     ballHeldBy = null
     lastThrowBy = 'p2'
     ballShape.collisionMask = GROUND | BODYPARTS
-    const speed = getSettings().throwSpeed ?? 20
-    const angleDeg = getSettings().throwAngle ?? 0
+    const speed = getSettings().throwSpeed ?? 14
+    const angleDeg = getSettings().throwAngle ?? 45
     const angleRad = (angleDeg * Math.PI) / 180
-    ball.velocity[0] = -speed * Math.sin(angleRad)
-    ball.velocity[1] = speed * Math.cos(angleRad)
+    // P2 throws left (-x) and up (+y), angle measured from horizontal
+    ball.velocity[0] = -speed * Math.cos(angleRad)
+    ball.velocity[1] = speed * Math.sin(angleRad)
   }
 })
 
@@ -406,6 +423,7 @@ function gameLoop(now) {
     torsoImage,
     pelvisImage,
     worldBottom: WORLD_BOTTOM,
+    netHeight,
   })
 }
 
