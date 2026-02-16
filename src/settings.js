@@ -3,10 +3,16 @@ const STORAGE_KEY = 'ragdoll-volley-settings'
 const defaults = {
   gravityY: 6.5,
   headLiftForce: 50,
+  throwSpeed: 14,
+  throwAngle: 45,
   ballGravity: 3.5,
   ballRestitution: 2,
   jumpImpulse: 40,
   moveForce: 40,
+  bounceDamping: 0.8,
+  playerBounceStrength: 0.45,
+  ballSize: 0.3,
+  movementSpeed: 1.2,
 }
 
 let current = { ...defaults }
@@ -74,7 +80,7 @@ export function initSettingsPanel() {
 
   const panel = document.createElement('aside')
   panel.className = 'settings-panel'
-  panel.innerHTML = '<h3>Настройки</h3><p class="controls-hint">Управление: W — прыжок, A — влево, D — вправо, R — бросок мяча</p>'
+  panel.innerHTML = '<h3>Настройки</h3><p class="controls-hint">Игрок 1 (слева): W — прыжок, A/D — влево/вправо, R — бросок.<br>Игрок 2 (справа): ↑ — прыжок, ←/→ — влево/вправо, Enter — бросок.</p>'
 
   panel.appendChild(
     slider(
@@ -100,6 +106,28 @@ export function initSettingsPanel() {
   )
   panel.appendChild(
     slider(
+      'throwSpeed',
+      'Сила броска',
+      1,
+      40,
+      1,
+      () => current.throwSpeed,
+      (v) => { current.throwSpeed = v }
+    )
+  )
+  panel.appendChild(
+    slider(
+      'throwAngle',
+      'Угол броска (°от горизонтали)',
+      5,
+      85,
+      5,
+      () => current.throwAngle,
+      (v) => { current.throwAngle = v }
+    )
+  )
+  panel.appendChild(
+    slider(
       'ballGravity',
       'Гравитация мяча',
       0,
@@ -107,6 +135,50 @@ export function initSettingsPanel() {
       0.5,
       () => current.ballGravity,
       (v) => { current.ballGravity = v }
+    )
+  )
+  panel.appendChild(
+    slider(
+      'bounceDamping',
+      'Эластичность',
+      0.1,
+      1,
+      0.05,
+      () => current.bounceDamping,
+      (v) => { current.bounceDamping = v }
+    )
+  )
+  panel.appendChild(
+    slider(
+      'playerBounceStrength',
+      'Отскок от игрока (0–1)',
+      0,
+      1,
+      0.05,
+      () => current.playerBounceStrength,
+      (v) => { current.playerBounceStrength = v }
+    )
+  )
+  panel.appendChild(
+    slider(
+      'ballSize',
+      'Размер мяча',
+      0.15,
+      0.5,
+      0.05,
+      () => current.ballSize,
+      (v) => { current.ballSize = v }
+    )
+  )
+  panel.appendChild(
+    slider(
+      'movementSpeed',
+      'Скорость движения',
+      0.5,
+      3,
+      0.1,
+      () => current.movementSpeed,
+      (v) => { current.movementSpeed = v }
     )
   )
   panel.appendChild(

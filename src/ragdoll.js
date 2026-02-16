@@ -27,9 +27,10 @@ const RAGDOLL_BOTTOM_OFFSET = 0.05
  * Create a ragdoll and add it to the world. Returns refs to bodies for control.
  * @param {p2.World} world
  * @param {number} [groundY] - если задан, кукла смещается так, чтобы стояла на земле (низ на groundY)
- * @returns {{ bodies: p2.Body[], pelvis: p2.Body, upperBody: p2.Body, head: p2.Body }}
+ * @param {number} [offsetX] - смещение по X для размещения левого/правого игрока
+ * @returns {{ bodies: p2.Body[], pelvis: p2.Body, upperBody: p2.Body, head: p2.Body, lowerLeftArm: p2.Body, lowerRightArm: p2.Body }}
  */
-export function createRagdoll(world, groundY) {
+export function createRagdoll(world, groundY, offsetX) {
   const bodyPartShapes = []
 
   const headShape = new p2.Circle({ radius: headRadius })
@@ -286,26 +287,34 @@ export function createRagdoll(world, groundY) {
   world.addConstraint(leftElbowJoint)
   world.addConstraint(rightElbowJoint)
 
+  const allBodies = [
+    lowerLeftLeg,
+    lowerRightLeg,
+    leftWeight,
+    rightWeight,
+    upperLeftLeg,
+    upperRightLeg,
+    pelvis,
+    upperBody,
+    head,
+    upperLeftArm,
+    upperRightArm,
+    lowerLeftArm,
+    lowerRightArm,
+  ]
+
   // Поставить куклу на землю: сместить все тела так, чтобы низ был на groundY
   if (typeof groundY === 'number') {
     const dy = groundY + RAGDOLL_BOTTOM_OFFSET
-    const allBodies = [
-      lowerLeftLeg,
-      lowerRightLeg,
-      leftWeight,
-      rightWeight,
-      upperLeftLeg,
-      upperRightLeg,
-      pelvis,
-      upperBody,
-      head,
-      upperLeftArm,
-      upperRightArm,
-      lowerLeftArm,
-      lowerRightArm,
-    ]
     for (const body of allBodies) {
       body.position[1] += dy
+    }
+  }
+
+  // Смещение по X для левого/правого игрока
+  if (typeof offsetX === 'number') {
+    for (const body of allBodies) {
+      body.position[0] += offsetX
     }
   }
 
