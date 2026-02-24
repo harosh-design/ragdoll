@@ -16,9 +16,11 @@ const BASE_LOWER_LEG_LENGTH = 0.5
 const BASE_WEIGHT_RADIUS = 0.05
 const BASE_RAGDOLL_BOTTOM_OFFSET = 0.05
 
-export const BODYPARTS = Math.pow(2, 2)
-export const GROUND = Math.pow(2, 3)
-export const OTHER = Math.pow(2, 4)
+export const BODYPARTS_P1 = Math.pow(2, 2)
+export const BODYPARTS_P2 = Math.pow(2, 3)
+export const BODYPARTS = BODYPARTS_P1 | BODYPARTS_P2
+export const GROUND = Math.pow(2, 4)
+export const OTHER = Math.pow(2, 5)
 
 /**
  * Create a ragdoll and add it to the world. Returns refs to bodies for control.
@@ -26,9 +28,13 @@ export const OTHER = Math.pow(2, 4)
  * @param {number} [groundY] - если задан, кукла смещается так, чтобы стояла на земле (низ на groundY)
  * @param {number} [offsetX] - смещение по X для размещения левого/правого игрока
  * @param {number} [scale=1] - масштаб размера игрока (0.5 = половина, 1.5 = полтора)
+ * @param {1|2} [playerId=1] - 1 или 2: коллизия только с телом другого игрока, не со своими суставами
  * @returns {{ bodies: p2.Body[], pelvis: p2.Body, upperBody: p2.Body, head: p2.Body, lowerLeftArm: p2.Body, lowerRightArm: p2.Body }}
  */
-export function createRagdoll(world, groundY, offsetX, scale = 1) {
+export function createRagdoll(world, groundY, offsetX, scale = 1, playerId = 1) {
+  const group = playerId === 2 ? BODYPARTS_P2 : BODYPARTS_P1
+  const otherPlayer = playerId === 2 ? BODYPARTS_P1 : BODYPARTS_P2
+  const mask = GROUND | OTHER | otherPlayer
   const k = scale
   const shouldersDistance = BASE_SHOULDERS * k
   const upperArmLength = BASE_UPPER_ARM_LENGTH * k
@@ -76,8 +82,8 @@ export function createRagdoll(world, groundY, offsetX, scale = 1) {
 
   for (let i = 0; i < bodyPartShapes.length; i++) {
     const s = bodyPartShapes[i]
-    s.collisionGroup = BODYPARTS
-    s.collisionMask = GROUND | OTHER
+    s.collisionGroup = group
+    s.collisionMask = mask
   }
 
   // Lower legs
@@ -98,10 +104,10 @@ export function createRagdoll(world, groundY, offsetX, scale = 1) {
   const weightMass = 2.5
   const leftWeightShape = new p2.Circle({ radius: weightRadius })
   const rightWeightShape = new p2.Circle({ radius: weightRadius })
-  leftWeightShape.collisionGroup = BODYPARTS
-  rightWeightShape.collisionGroup = BODYPARTS
-  leftWeightShape.collisionMask = GROUND | OTHER
-  rightWeightShape.collisionMask = GROUND | OTHER
+  leftWeightShape.collisionGroup = group
+  rightWeightShape.collisionGroup = group
+  leftWeightShape.collisionMask = mask
+  rightWeightShape.collisionMask = mask
 
   const leftWeight = new p2.Body({
     mass: weightMass,

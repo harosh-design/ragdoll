@@ -206,8 +206,8 @@ const lastGoodPosition = new WeakMap()
 
 // Player 1 left side, Player 2 right side (size from settings; applies on restart)
 const playerScale = getSettings().playerSize ?? 1
-const ragdoll1 = createRagdoll(world, WORLD_BOTTOM, WORLD_LEFT + 4, playerScale)
-const ragdoll2 = createRagdoll(world, WORLD_BOTTOM, WORLD_RIGHT - 4, playerScale)
+const ragdoll1 = createRagdoll(world, WORLD_BOTTOM, WORLD_LEFT + 4, playerScale, 1)
+const ragdoll2 = createRagdoll(world, WORLD_BOTTOM, WORLD_RIGHT - 4, playerScale, 2)
 
 // Hand pivot: right arm tip = +width/2, left arm tip = -width/2
 const lowerRightArmShape = ragdoll1.lowerRightArm.shapes[0]
@@ -218,6 +218,13 @@ const BALL_OFFSET_Y = -0.06
 /** 'p1' | 'p2' | null when in flight */
 let ballHeldBy = 'p1'
 
+/** Constraint that holds the ball to the hand until serve; removed on throw. */
+let ballHoldConstraint = null
+
+const ANGLE_45_RAD = (45 * Math.PI) / 180
+const DIR_45_P1 = [Math.cos(ANGLE_45_RAD), Math.sin(ANGLE_45_RAD)]
+const DIR_45_P2 = [-Math.cos(ANGLE_45_RAD), Math.sin(ANGLE_45_RAD)]
+
 function placeBallAtHand(ragdoll, useRightHand) {
   const arm = useRightHand ? ragdoll.lowerRightArm : ragdoll.lowerLeftArm
   const pivotX = useRightHand ? handPivotXRight : handPivotXLeft
@@ -226,8 +233,40 @@ function placeBallAtHand(ragdoll, useRightHand) {
   ball.position[1] = arm.position[1] + pivotX * Math.sin(a) + BALL_OFFSET_Y
 }
 
-// Initial serve: ball at Player 1's right hand
-placeBallAtHand(ragdoll1, true)
+/** Скорость подачи = база под 45° в сторону противника + скорость туловища × коэффициент. Работает и на земле, и в прыжке. */
+function getThrowVelocity(ragdoll, isP1) {
+  const coef = getSettings().throwTorsoCoef ?? 1
+  const baseSpeed = getSettings().throwSpeed ?? 14
+  const dir45 = isP1 ? DIR_45_P1 : DIR_45_P2
+  const tx = (ragdoll.upperBody.velocity[0] ?? 0) * coef
+  const ty = (ragdoll.upperBody.velocity[1] ?? 0) * coef
+  return [
+    dir45[0] * baseSpeed + tx,
+    dir45[1] * baseSpeed + ty,
+  ]
+}
+
+/** Жёстко привязать мяч к руке через LockConstraint (до подачи). */
+function attachBallToHand(ragdoll, useRightHand) {
+  if (ballHoldConstraint) {
+    world.removeConstraint(ballHoldConstraint)
+    ballHoldConstraint = null
+  }
+  placeBallAtHand(ragdoll, useRightHand)
+  ball.velocity[0] = 0
+  ball.velocity[1] = 0
+  ball.angularVelocity = 0
+  const arm = useRightHand ? ragdoll.lowerRightArm : ragdoll.lowerLeftArm
+  const pivotX = useRightHand ? handPivotXRight : handPivotXLeft
+  ballHoldConstraint = new p2.LockConstraint(arm, ball, {
+    collideConnected: false,
+    localOffsetB: [pivotX, BALL_OFFSET_Y],
+  })
+  world.addConstraint(ballHoldConstraint)
+}
+
+// Initial serve: ball rigidly attached to Player 1's right hand
+attachBallToHand(ragdoll1, true)
 for (const body of ragdoll1.bodies) {
   const p = body.position
   if (p != null && (p[0] != null || p.x != null) && (p[1] != null || p.y != null)) {
@@ -248,26 +287,28 @@ initSettingsPanel()
 
 window.addEventListener('keydown', (e) => {
   if (e.code === 'KeyR' && ballHeldBy === 'p1') {
+    if (ballHoldConstraint) {
+      world.removeConstraint(ballHoldConstraint)
+      ballHoldConstraint = null
+    }
     ballHeldBy = null
     lastThrowBy = 'p1'
     ballShape.collisionMask = GROUND | BODYPARTS
-    const speed = getSettings().throwSpeed ?? 14
-    const angleDeg = getSettings().throwAngle ?? 45
-    const angleRad = (angleDeg * Math.PI) / 180
-    // P1 throws right (+x) and up (+y), angle measured from horizontal
-    ball.velocity[0] = speed * Math.cos(angleRad)
-    ball.velocity[1] = speed * Math.sin(angleRad)
+    const [vx, vy] = getThrowVelocity(ragdoll1, true)
+    ball.velocity[0] = vx
+    ball.velocity[1] = vy
   }
   if (e.code === 'Enter' && ballHeldBy === 'p2') {
+    if (ballHoldConstraint) {
+      world.removeConstraint(ballHoldConstraint)
+      ballHoldConstraint = null
+    }
     ballHeldBy = null
     lastThrowBy = 'p2'
     ballShape.collisionMask = GROUND | BODYPARTS
-    const speed = getSettings().throwSpeed ?? 14
-    const angleDeg = getSettings().throwAngle ?? 45
-    const angleRad = (angleDeg * Math.PI) / 180
-    // P2 throws left (-x) and up (+y), angle measured from horizontal
-    ball.velocity[0] = -speed * Math.cos(angleRad)
-    ball.velocity[1] = speed * Math.sin(angleRad)
+    const [vx, vy] = getThrowVelocity(ragdoll2, false)
+    ball.velocity[0] = vx
+    ball.velocity[1] = vy
   }
 })
 
@@ -348,32 +389,12 @@ function gameLoop(now) {
       ball.applyForce([0, -ball.mass * gBall])
     }
     world.step(FIXED_DT)
-    if (ballHeldBy === 'p1') {
-      const arm = ragdoll1.lowerRightArm
-      const ang = arm.angle
-      const pivotX = handPivotXRight
-      ball.position[0] = arm.position[0] + pivotX * Math.cos(ang)
-      ball.position[1] = arm.position[1] + pivotX * Math.sin(ang) + BALL_OFFSET_Y
-      ball.velocity[0] = arm.velocity[0] - arm.angularVelocity * pivotX * Math.sin(ang)
-      ball.velocity[1] = arm.velocity[1] + arm.angularVelocity * pivotX * Math.cos(ang)
-    } else if (ballHeldBy === 'p2') {
-      const arm = ragdoll2.lowerLeftArm
-      const ang = arm.angle
-      const pivotX = handPivotXLeft
-      ball.position[0] = arm.position[0] + pivotX * Math.cos(ang)
-      ball.position[1] = arm.position[1] + pivotX * Math.sin(ang) + BALL_OFFSET_Y
-      ball.velocity[0] = arm.velocity[0] - arm.angularVelocity * pivotX * Math.sin(ang)
-      ball.velocity[1] = arm.velocity[1] + arm.angularVelocity * pivotX * Math.cos(ang)
-    }
     if (ballRespawnFor !== null) {
       ballHeldBy = ballRespawnFor
       ballRespawnFor = null
-      ball.velocity[0] = 0
-      ball.velocity[1] = 0
-      ball.angularVelocity = 0
       ballShape.collisionMask = GROUND
-      if (ballHeldBy === 'p1') placeBallAtHand(ragdoll1, true)
-      else placeBallAtHand(ragdoll2, false)
+      if (ballHeldBy === 'p1') attachBallToHand(ragdoll1, true)
+      else attachBallToHand(ragdoll2, false)
     }
     accumulator -= FIXED_DT
   }

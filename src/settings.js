@@ -4,7 +4,6 @@ const defaults = {
   gravityY: 6.5,
   headLiftForce: 50,
   throwSpeed: 14,
-  throwAngle: 45,
   ballGravity: 3.5,
   ballRestitution: 2,
   jumpImpulse: 40,
@@ -16,6 +15,7 @@ const defaults = {
   movementSpeed: 1.2,
   netHeight: 6,
   playerSize: 1,
+  throwTorsoCoef: 1,
 }
 
 let current = { ...defaults }
@@ -110,7 +110,7 @@ export function initSettingsPanel() {
   panel.appendChild(
     slider(
       'throwSpeed',
-      'Сила броска',
+      'Сила броска (базовая)',
       1,
       40,
       1,
@@ -120,13 +120,13 @@ export function initSettingsPanel() {
   )
   panel.appendChild(
     slider(
-      'throwAngle',
-      'Угол броска (°от горизонтали)',
-      5,
-      85,
-      5,
-      () => current.throwAngle,
-      (v) => { current.throwAngle = v }
+      'throwTorsoCoef',
+      'Коэф. силы от туловища',
+      0.2,
+      3,
+      0.1,
+      () => current.throwTorsoCoef,
+      (v) => { current.throwTorsoCoef = v }
     )
   )
   panel.appendChild(
