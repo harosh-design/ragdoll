@@ -1,4 +1,5 @@
 const STORAGE_KEY = 'ragdoll-volley-settings'
+const PRESETS_KEY = 'ragdoll-volley-presets'
 
 const defaults = {
   gravityY: 6.5,
@@ -36,6 +37,37 @@ function save() {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(current))
   } catch (_) {}
+}
+
+function getPresets() {
+  try {
+    const raw = localStorage.getItem(PRESETS_KEY)
+    if (raw) return JSON.parse(raw)
+  } catch (_) {}
+  return {}
+}
+
+function savePresets(presets) {
+  try {
+    localStorage.setItem(PRESETS_KEY, JSON.stringify(presets))
+  } catch (_) {}
+}
+
+/** Сохранить текущие настройки как пресет с именем name. */
+function saveAsPreset(name) {
+  const presets = getPresets()
+  presets[name] = { ...current }
+  savePresets(presets)
+}
+
+/** Загрузить пресет в текущие настройки, сохранить и перезагрузить страницу. */
+function loadPreset(name) {
+  const presets = getPresets()
+  const data = presets[name]
+  if (!data) return
+  Object.assign(current, data)
+  save()
+  location.reload()
 }
 
 export function getSettings() {
@@ -101,8 +133,8 @@ export function initSettingsPanel() {
       'headLiftForce',
       'Сила подъёма головы',
       0,
-      25,
-      0.5,
+      120,
+      1,
       () => current.headLiftForce,
       (v) => { current.headLiftForce = v }
     )
@@ -220,9 +252,9 @@ export function initSettingsPanel() {
   panel.appendChild(
     slider(
       'jump',
-      'Сила прыжка',
+      'Сила прыжка (таз)',
       5,
-      40,
+      80,
       0.5,
       () => current.jumpImpulse,
       (v) => { current.jumpImpulse = v }
@@ -243,9 +275,9 @@ export function initSettingsPanel() {
     slider(
       'move',
       'Сила движения',
-      40,
-      250,
-      5,
+      0,
+      100,
+      1,
       () => current.moveForce,
       (v) => { current.moveForce = v }
     )
@@ -261,6 +293,28 @@ export function initSettingsPanel() {
     setTimeout(() => { saveBtn.textContent = 'Сохранить настройки' }, 1500)
   })
   panel.appendChild(saveBtn)
+
+  const presetRow = document.createElement('div')
+  presetRow.className = 'setting-row'
+  presetRow.style.marginTop = '12px'
+  presetRow.style.flexWrap = 'wrap'
+  const saveBallzBtn = document.createElement('button')
+  saveBallzBtn.type = 'button'
+  saveBallzBtn.textContent = 'Сохранить как пресет Ballz'
+  saveBallzBtn.className = 'settings-save'
+  saveBallzBtn.addEventListener('click', () => {
+    saveAsPreset('Ballz')
+    saveBallzBtn.textContent = 'Сохранено в Ballz'
+    setTimeout(() => { saveBallzBtn.textContent = 'Сохранить как пресет Ballz' }, 1500)
+  })
+  const loadBallzBtn = document.createElement('button')
+  loadBallzBtn.type = 'button'
+  loadBallzBtn.textContent = 'Вернуть пресет Ballz'
+  loadBallzBtn.className = 'settings-save'
+  loadBallzBtn.addEventListener('click', () => loadPreset('Ballz'))
+  presetRow.appendChild(saveBallzBtn)
+  presetRow.appendChild(loadBallzBtn)
+  panel.appendChild(presetRow)
 
   const restartBtn = document.createElement('button')
   restartBtn.type = 'button'
