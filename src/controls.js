@@ -1,7 +1,7 @@
-// Player 1: WASD
-const keysP1 = { left: false, right: false, jump: false }
+// Player 1: WASD + S (down)
+const keysP1 = { left: false, right: false, jump: false, down: false }
 // Player 2: Arrow keys
-const keysP2 = { left: false, right: false, jump: false }
+const keysP2 = { left: false, right: false, jump: false, down: false }
 
 const stateP1 = { jumpConsumed: true, airJumpConsumed: true, wasInAir: false }
 const stateP2 = { jumpConsumed: true, airJumpConsumed: true, wasInAir: false }
@@ -15,6 +15,7 @@ export function initControls() {
       keysP1.jump = true
       stateP1.jumpConsumed = false
     }
+    if (e.code === 'KeyS') keysP1.down = true
     if (e.code === 'ArrowLeft') keysP2.left = true
     if (e.code === 'ArrowRight') keysP2.right = true
     if (e.code === 'ArrowUp') {
@@ -22,14 +23,17 @@ export function initControls() {
       keysP2.jump = true
       stateP2.jumpConsumed = false
     }
+    if (e.code === 'ArrowDown') keysP2.down = true
   })
   window.addEventListener('keyup', (e) => {
     if (e.code === 'KeyA') keysP1.left = false
     if (e.code === 'KeyD') keysP1.right = false
     if (e.code === 'KeyW') keysP1.jump = false
+    if (e.code === 'KeyS') keysP1.down = false
     if (e.code === 'ArrowLeft') keysP2.left = false
     if (e.code === 'ArrowRight') keysP2.right = false
     if (e.code === 'ArrowUp') keysP2.jump = false
+    if (e.code === 'ArrowDown') keysP2.down = false
   })
 }
 
@@ -55,6 +59,8 @@ export function applyControls(ragdoll, settings, context, keySet) {
 
   if (keys.left) head.applyForce([-moveForce, 0])
   if (keys.right) head.applyForce([moveForce, 0])
+  const downForce = settings.downForce ?? 40
+  if (keys.down) head.applyForce([0, -downForce])
 
   if (keys.jump) {
     if (isOnGround && !state.jumpConsumed) {

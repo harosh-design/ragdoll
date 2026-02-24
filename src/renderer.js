@@ -1,5 +1,4 @@
 import * as p2 from 'p2-es'
-import { LOWER_ARM_LENGTH } from './ragdoll.js'
 
 /**
  * Transform world coords (p2: y-up) to canvas (y-down), with scale and center.
@@ -312,9 +311,10 @@ function drawArmWithHand(ctx, pos, boxAngle, shape, scale, centerX, centerY, sig
   ctx.lineWidth = 2
   ctx.stroke()
 
-  const handRadius = 0.12
-  const tipX = pos[0] + sign * (LOWER_ARM_LENGTH / 2) * cos
-  const tipY = pos[1] + sign * (LOWER_ARM_LENGTH / 2) * sin
+  const armHalfLen = shape.width / 2
+  const handRadius = 0.12 * (shape.width / 0.4)
+  const tipX = pos[0] + sign * armHalfLen * cos
+  const tipY = pos[1] + sign * armHalfLen * sin
   const handC = toCanvas(tipX, tipY, scale, centerX, centerY)
   ctx.beginPath()
   ctx.arc(handC.x, handC.y, scale * handRadius, 0, Math.PI * 2)

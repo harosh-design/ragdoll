@@ -1,36 +1,51 @@
 import * as p2 from 'p2-es'
 
-const shouldersDistance = 0.5
-const upperArmLength = 0.4
-const lowerArmLength = 0.4
-const upperArmSize = 0.2
-const lowerArmSize = 0.2
-const neckLength = 0.1
-const headRadius = 0.25
-const upperBodyLength = 0.6
-const pelvisLength = 0.4
-const upperLegLength = 0.5
-const upperLegSize = 0.2
-const lowerLegSize = 0.2
-const lowerLegLength = 0.5
+const BASE_SHOULDERS = 0.5
+const BASE_UPPER_ARM_LENGTH = 0.4
+const BASE_LOWER_ARM_LENGTH = 0.4
+const BASE_UPPER_ARM_SIZE = 0.2
+const BASE_LOWER_ARM_SIZE = 0.2
+const BASE_NECK_LENGTH = 0.1
+const BASE_HEAD_RADIUS = 0.25
+const BASE_UPPER_BODY_LENGTH = 0.6
+const BASE_PELVIS_LENGTH = 0.4
+const BASE_UPPER_LEG_LENGTH = 0.5
+const BASE_UPPER_LEG_SIZE = 0.2
+const BASE_LOWER_LEG_SIZE = 0.2
+const BASE_LOWER_LEG_LENGTH = 0.5
+const BASE_WEIGHT_RADIUS = 0.05
+const BASE_RAGDOLL_BOTTOM_OFFSET = 0.05
 
 export const BODYPARTS = Math.pow(2, 2)
 export const GROUND = Math.pow(2, 3)
 export const OTHER = Math.pow(2, 4)
-
-export const LOWER_ARM_LENGTH = lowerArmLength
-
-/** Нижняя точка куклы при сборке «на нуле» — низ утяжелителей (центр 0, радиус weightRadius). */
-const RAGDOLL_BOTTOM_OFFSET = 0.05
 
 /**
  * Create a ragdoll and add it to the world. Returns refs to bodies for control.
  * @param {p2.World} world
  * @param {number} [groundY] - если задан, кукла смещается так, чтобы стояла на земле (низ на groundY)
  * @param {number} [offsetX] - смещение по X для размещения левого/правого игрока
+ * @param {number} [scale=1] - масштаб размера игрока (0.5 = половина, 1.5 = полтора)
  * @returns {{ bodies: p2.Body[], pelvis: p2.Body, upperBody: p2.Body, head: p2.Body, lowerLeftArm: p2.Body, lowerRightArm: p2.Body }}
  */
-export function createRagdoll(world, groundY, offsetX) {
+export function createRagdoll(world, groundY, offsetX, scale = 1) {
+  const k = scale
+  const shouldersDistance = BASE_SHOULDERS * k
+  const upperArmLength = BASE_UPPER_ARM_LENGTH * k
+  const lowerArmLength = BASE_LOWER_ARM_LENGTH * k
+  const upperArmSize = BASE_UPPER_ARM_SIZE * k
+  const lowerArmSize = BASE_LOWER_ARM_SIZE * k
+  const neckLength = BASE_NECK_LENGTH * k
+  const headRadius = BASE_HEAD_RADIUS * k
+  const upperBodyLength = BASE_UPPER_BODY_LENGTH * k
+  const pelvisLength = BASE_PELVIS_LENGTH * k
+  const upperLegLength = BASE_UPPER_LEG_LENGTH * k
+  const upperLegSize = BASE_UPPER_LEG_SIZE * k
+  const lowerLegSize = BASE_LOWER_LEG_SIZE * k
+  const lowerLegLength = BASE_LOWER_LEG_LENGTH * k
+  const weightRadius = BASE_WEIGHT_RADIUS * k
+  const RAGDOLL_BOTTOM_OFFSET = BASE_RAGDOLL_BOTTOM_OFFSET * k
+
   const bodyPartShapes = []
 
   const headShape = new p2.Circle({ radius: headRadius })
@@ -81,7 +96,6 @@ export function createRagdoll(world, groundY, offsetX) {
 
   // Невидимые утяжелители внизу голеней — кукла приземляется на ноги
   const weightMass = 2.5
-  const weightRadius = 0.05
   const leftWeightShape = new p2.Circle({ radius: weightRadius })
   const rightWeightShape = new p2.Circle({ radius: weightRadius })
   leftWeightShape.collisionGroup = BODYPARTS

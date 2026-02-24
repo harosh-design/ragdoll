@@ -8,11 +8,14 @@ const defaults = {
   ballGravity: 3.5,
   ballRestitution: 2,
   jumpImpulse: 40,
+  downForce: 40,
   moveForce: 40,
   bounceDamping: 0.8,
   playerBounceStrength: 0.45,
   ballSize: 0.3,
   movementSpeed: 1.2,
+  netHeight: 6,
+  playerSize: 1,
 }
 
 let current = { ...defaults }
@@ -80,7 +83,7 @@ export function initSettingsPanel() {
 
   const panel = document.createElement('aside')
   panel.className = 'settings-panel'
-  panel.innerHTML = '<h3>Настройки</h3><p class="controls-hint">Игрок 1 (слева): W — прыжок, A/D — влево/вправо, R — бросок.<br>Игрок 2 (справа): ↑ — прыжок, ←/→ — влево/вправо, Enter — бросок.</p>'
+  panel.innerHTML = '<h3>Настройки</h3><p class="controls-hint">Игрок 1 (слева): W — прыжок, S — вниз, A/D — влево/вправо, R — бросок.<br>Игрок 2 (справа): ↑ — прыжок, ↓ — вниз, ←/→ — влево/вправо, Enter — бросок.</p>'
 
   panel.appendChild(
     slider(
@@ -124,6 +127,17 @@ export function initSettingsPanel() {
       5,
       () => current.throwAngle,
       (v) => { current.throwAngle = v }
+    )
+  )
+  panel.appendChild(
+    slider(
+      'netHeight',
+      'Высота сетки',
+      2,
+      18,
+      0.5,
+      () => current.netHeight,
+      (v) => { current.netHeight = v }
     )
   )
   panel.appendChild(
@@ -172,6 +186,17 @@ export function initSettingsPanel() {
   )
   panel.appendChild(
     slider(
+      'playerSize',
+      'Размер игрока',
+      0.5,
+      1.5,
+      0.05,
+      () => current.playerSize,
+      (v) => { current.playerSize = v }
+    )
+  )
+  panel.appendChild(
+    slider(
       'movementSpeed',
       'Скорость движения',
       0.5,
@@ -201,6 +226,17 @@ export function initSettingsPanel() {
       0.5,
       () => current.jumpImpulse,
       (v) => { current.jumpImpulse = v }
+    )
+  )
+  panel.appendChild(
+    slider(
+      'downForce',
+      'Сила вниз',
+      0,
+      120,
+      5,
+      () => current.downForce,
+      (v) => { current.downForce = v }
     )
   )
   panel.appendChild(

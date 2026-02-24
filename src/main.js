@@ -83,16 +83,15 @@ rightWallShape.collisionGroup = GROUND
 rightWallShape.collisionMask = BODYPARTS | OTHER
 world.addBody(rightWall)
 
-// Center net: ~1/3 height so the ball can fly over it
-const netHeight = wallHeight / 3
-const centerWallShape = new p2.Box({ width: wallThickness, height: netHeight })
+// Center net: height from settings (slider), ball can fly over if high enough
+const getNetHeight = () => getSettings().netHeight ?? 6
+const centerWallShape = new p2.Box({ width: wallThickness, height: getNetHeight() })
 const centerWall = new p2.Body({
   type: p2.Body.STATIC,
-  position: [0, WORLD_BOTTOM + netHeight / 2],
+  position: [0, WORLD_BOTTOM + getNetHeight() / 2],
 })
 centerWall.addShape(centerWallShape)
 centerWall.isNet = true
-centerWall.netHeight = netHeight // for renderer to draw net only this tall
 centerWallShape.collisionGroup = GROUND
 centerWallShape.collisionMask = BODYPARTS | OTHER
 world.addBody(centerWall)
@@ -205,9 +204,10 @@ world.on('postStep', () => {
 
 const lastGoodPosition = new WeakMap()
 
-// Player 1 left side, Player 2 right side
-const ragdoll1 = createRagdoll(world, WORLD_BOTTOM, WORLD_LEFT + 4)
-const ragdoll2 = createRagdoll(world, WORLD_BOTTOM, WORLD_RIGHT - 4)
+// Player 1 left side, Player 2 right side (size from settings; applies on restart)
+const playerScale = getSettings().playerSize ?? 1
+const ragdoll1 = createRagdoll(world, WORLD_BOTTOM, WORLD_LEFT + 4, playerScale)
+const ragdoll2 = createRagdoll(world, WORLD_BOTTOM, WORLD_RIGHT - 4, playerScale)
 
 // Hand pivot: right arm tip = +width/2, left arm tip = -width/2
 const lowerRightArmShape = ragdoll1.lowerRightArm.shapes[0]
@@ -402,6 +402,12 @@ function gameLoop(now) {
   const ballRadiusSetting = s.ballSize ?? 0.25
   if (ballShape.radius !== ballRadiusSetting) ballShape.radius = ballRadiusSetting
 
+  const currentNetHeight = s.netHeight ?? 6
+  if (centerWallShape.height !== currentNetHeight) {
+    centerWallShape.height = currentNetHeight
+    centerWall.position[1] = WORLD_BOTTOM + currentNetHeight / 2
+  }
+
   render(ctx, world, size, SCALE, {
     ragdolls: [
       {
@@ -423,7 +429,7 @@ function gameLoop(now) {
     torsoImage,
     pelvisImage,
     worldBottom: WORLD_BOTTOM,
-    netHeight,
+    netHeight: currentNetHeight,
   })
 }
 
