@@ -19,14 +19,21 @@ function toCanvas(x, y, scale, centerX, centerY) {
  * Draw the physics world to canvas. Y-up (p2) -> Y-down (canvas).
  * @param {CanvasRenderingContext2D} ctx
  * @param {p2.World} world
- * @param {{ width: number, height: number }} size - canvas size
- * @param {number} scale - pixels per physics unit (e.g. 100)
- * @param {{ ragdolls?: Array<{ head: p2.Body, upperBody: p2.Body, pelvis: p2.Body, lowerLeftArm: p2.Body, lowerRightArm: p2.Body }>, faceImage?: HTMLImageElement, torsoImage?: HTMLImageElement, pelvisImage?: HTMLImageElement, worldBottom?: number }} [opts]
+ * @param {{ width: number, height: number, scale?: number }} size - canvas size and scale (px per unit)
+ * @param {number} scale - pixels per physics unit (from size.scale or fallback)
+ * @param {{ ragdolls?: Array, faceImage?: HTMLImageElement, torsoImage?: HTMLImageElement, pelvisImage?: HTMLImageElement, worldBottom?: number, worldTop?: number, worldLeft?: number, worldRight?: number }} [opts]
  */
-export function render(ctx, world, size, scale = 100, opts = {}) {
-  const { ragdolls = [], faceImage, torsoImage, pelvisImage, worldBottom, netHeight } = opts
+export function render(ctx, world, size, scale, opts = {}) {
+  scale = size.scale ?? scale ?? 100
+  const { ragdolls = [], faceImage, torsoImage, pelvisImage, worldBottom, worldTop, worldLeft, worldRight, netHeight } = opts
+  // Floor 5% above bottom of screen: world y = worldBottom maps to canvas y = 95% of height
+  const floorCanvasY = size.height * 0.95
   const centerX = size.width / 2
-  const centerY = size.height / 2
+  const centerY = worldBottom != null ? floorCanvasY - scale * (-worldBottom) : size.height / 2
+  const fieldW = ((worldRight != null && worldLeft != null) ? (worldRight - worldLeft) : 20) * scale
+  const fieldH = ((worldTop != null && worldBottom != null) ? (worldTop - worldBottom) : 18) * scale
+  const fieldLeft = (size.width - fieldW) / 2
+  const fieldTop = worldBottom != null ? floorCanvasY - scale * (worldTop - worldBottom) : (size.height - fieldH) / 2
   const playerColors = ['#e94560', '#2563eb'] // red (p1), blue (p2)
   const playerStrokeColors = ['#0f3460', '#1e3a5f']
 
@@ -44,22 +51,31 @@ export function render(ctx, world, size, scale = 100, opts = {}) {
     return null
   }
 
-  // Split field: left half red tint, right half blue tint
+  // Letterbox: full canvas black, then game field area with red/blue split
+  ctx.fillStyle = '#000'
+  ctx.fillRect(0, 0, size.width, size.height)
+  ctx.save()
+  ctx.beginPath()
+  ctx.rect(fieldLeft, fieldTop, fieldW, fieldH)
+  ctx.clip()
   ctx.fillStyle = '#2a1628'
-  ctx.fillRect(0, 0, size.width / 2, size.height)
+  ctx.fillRect(fieldLeft, fieldTop, fieldW / 2, fieldH)
   ctx.fillStyle = '#16202a'
-  ctx.fillRect(size.width / 2, 0, size.width / 2, size.height)
+  ctx.fillRect(fieldLeft + fieldW / 2, fieldTop, fieldW / 2, fieldH)
+  ctx.restore()
 
   function drawScene(clipLeftHalf) {
+    ctx.save()
+    ctx.beginPath()
+    ctx.rect(fieldLeft, fieldTop, fieldW, fieldH)
+    ctx.clip()
     if (clipLeftHalf) {
-      ctx.save()
       ctx.beginPath()
-      ctx.rect(0, 0, size.width / 2, size.height)
+      ctx.rect(fieldLeft, fieldTop, fieldW / 2, fieldH)
       ctx.clip()
     } else {
-      ctx.save()
       ctx.beginPath()
-      ctx.rect(size.width / 2, 0, size.width / 2, size.height)
+      ctx.rect(fieldLeft + fieldW / 2, fieldTop, fieldW / 2, fieldH)
       ctx.clip()
     }
   for (let i = 0; i < world.bodies.length; i++) {

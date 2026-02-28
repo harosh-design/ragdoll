@@ -6,15 +6,35 @@
     <title>Ragdoll Volley - Scene</title>
     <style>
       * { margin: 0; padding: 0; box-sizing: border-box; }
-      body { overflow: hidden; background: #1a1a2e; font-family: system-ui, sans-serif; }
-      #app { display: flex; justify-content: center; align-items: center; min-height: 100vh; position: relative; }
-      canvas { display: block; background: #16213e; }
+      body { overflow: hidden; background: #000; font-family: system-ui, sans-serif; }
+      #app { position: relative; width: 100vw; height: 100vh; overflow: hidden; }
+      canvas { display: block; width: 100%; height: 100%; background: #16213e; }
+      .settings-toggle {
+        position: fixed;
+        top: 8px;
+        right: 8px;
+        z-index: 11;
+        width: 40px;
+        height: 40px;
+        border: none;
+        border-radius: 8px;
+        background: rgba(15, 52, 96, 0.9);
+        color: #eee;
+        font-size: 1.25rem;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+      }
+      .settings-toggle:hover { background: rgba(15, 52, 96, 1); }
       .settings-panel {
         position: fixed;
         top: 0;
         right: 0;
         width: 220px;
-        height: 100vh;
+        max-height: 100vh;
+        overflow-y: auto;
         background: rgba(15, 52, 96, 0.95);
         color: #eee;
         padding: 16px;
@@ -22,6 +42,13 @@
         flex-direction: column;
         gap: 12px;
         border-left: 1px solid #0f3460;
+        z-index: 10;
+        transition: transform 0.2s ease-out;
+        box-shadow: -4px 0 16px rgba(0,0,0,0.2);
+      }
+      .settings-panel.closed {
+        transform: translateX(100%);
+        pointer-events: none;
       }
       .settings-panel h3 { font-size: 1rem; margin-bottom: 8px; }
       .controls-hint { font-size: 0.8rem; opacity: 0.9; margin-bottom: 12px; line-height: 1.3; }

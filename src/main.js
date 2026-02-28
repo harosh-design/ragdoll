@@ -16,11 +16,9 @@ const pelvisImage = new Image()
 pelvisImage.src = tazUrl
 
 const FIXED_DT = 1 / 60
-const SCALE = 100
-const PANEL_WIDTH = 220
 
-export const WORLD_LEFT = -10
-export const WORLD_RIGHT = 10
+export const WORLD_LEFT = -16
+export const WORLD_RIGHT = 16
 export const WORLD_BOTTOM = -4
 export const WORLD_TOP = 14
 
@@ -35,11 +33,14 @@ const app = document.querySelector('#app')
 app.appendChild(canvas)
 
 function resize() {
-  const w = Math.max(100, window.innerWidth - PANEL_WIDTH)
+  const w = window.innerWidth
   const h = window.innerHeight
   canvas.width = w
   canvas.height = h
-  return { width: w, height: h }
+  const fieldW = WORLD_RIGHT - WORLD_LEFT
+  const fieldH = WORLD_TOP - WORLD_BOTTOM
+  const scale = Math.min(w / fieldW, h / fieldH)
+  return { width: w, height: h, scale }
 }
 
 let size = resize()
@@ -492,7 +493,7 @@ function gameLoop(now) {
     centerWall.position[1] = WORLD_BOTTOM + currentNetHeight / 2
   }
 
-  render(ctx, world, size, SCALE, {
+  render(ctx, world, size, size.scale, {
     ragdolls: [
       {
         head: ragdoll1.head,
@@ -513,6 +514,9 @@ function gameLoop(now) {
     torsoImage,
     pelvisImage,
     worldBottom: WORLD_BOTTOM,
+    worldTop: WORLD_TOP,
+    worldLeft: WORLD_LEFT,
+    worldRight: WORLD_RIGHT,
     netHeight: currentNetHeight,
   })
 }

@@ -149,7 +149,8 @@ load()
 export function initSettingsPanel() {
 
   const panel = document.createElement('aside')
-  panel.className = 'settings-panel'
+  panel.className = 'settings-panel closed'
+  panel.setAttribute('aria-hidden', 'true')
   panel.innerHTML = '<h3>Настройки</h3><p class="controls-hint">Игрок 1 (слева): W — прыжок, S — вниз, A/D — влево/вправо, R — бросок.<br>Игрок 2 (справа): ↑ — прыжок, ↓ — вниз, ←/→ — влево/вправо, Enter — бросок.</p>'
 
   panel.appendChild(
@@ -400,5 +401,24 @@ export function initSettingsPanel() {
   restartBtn.addEventListener('click', () => location.reload())
   panel.appendChild(restartBtn)
 
-  document.querySelector('#app').appendChild(panel)
+  const app = document.querySelector('#app')
+  app.appendChild(panel)
+
+  function setPanelOpen(open) {
+    const closed = !open
+    panel.classList.toggle('closed', closed)
+    panel.setAttribute('aria-hidden', String(closed))
+  }
+
+  const toggleBtn = document.createElement('button')
+  toggleBtn.type = 'button'
+  toggleBtn.className = 'settings-toggle'
+  toggleBtn.setAttribute('aria-label', 'Открыть настройки')
+  toggleBtn.textContent = '⚙'
+  toggleBtn.addEventListener('click', () => setPanelOpen(panel.classList.contains('closed')))
+  app.appendChild(toggleBtn)
+
+  window.addEventListener('keydown', (e) => {
+    if (e.code === 'Escape') setPanelOpen(false)
+  })
 }
