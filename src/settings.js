@@ -15,6 +15,7 @@ const defaults = {
   ballSize: 0.3,
   movementSpeed: 1.2,
   netHeight: 6,
+  netRepelForce: 120,
   playerSize: 1,
   throwTorsoCoef: 1,
 }
@@ -204,6 +205,17 @@ export function initSettingsPanel() {
       0.5,
       () => current.netHeight,
       (v) => { current.netHeight = v }
+    )
+  )
+  panel.appendChild(
+    slider(
+      'netRepelForce',
+      'Выталкивание с чужой площадки',
+      0,
+      300,
+      5,
+      () => current.netRepelForce,
+      (v) => { current.netRepelForce = v }
     )
   )
   panel.appendChild(

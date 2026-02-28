@@ -86,6 +86,7 @@ world.addBody(rightWall)
 // Center net: height from settings (slider), ball can fly over if high enough
 const getNetHeight = () => getSettings().netHeight ?? 6
 const centerWallShape = new p2.Box({ width: wallThickness, height: getNetHeight() })
+
 const centerWall = new p2.Body({
   type: p2.Body.STATIC,
   position: [0, WORLD_BOTTOM + getNetHeight() / 2],
@@ -363,6 +364,66 @@ function getRagdollBottom(ragdoll) {
   return minY
 }
 
+/** Возвращает левую и правую границы тела по X (с учётом форм). */
+function getBodyXExtents(body) {
+  const x = body.position[0] ?? body.position?.x ?? 0
+  let left = x
+  let right = x
+  for (const shape of body.shapes) {
+    let hx = 0
+    if (shape.type === p2.Shape.CIRCLE) hx = shape.radius
+    else if (shape.type === p2.Shape.BOX) hx = shape.width / 2
+    left = Math.min(left, x - hx)
+    right = Math.max(right, x + hx)
+  }
+  return { left, right }
+}
+
+/** Глубина корпуса (ширина туловища) — на столько игрок может зайти на половину соперника. */
+function getTorsoDepth(ragdoll) {
+  const shape = ragdoll.upperBody?.shapes?.[0]
+  return shape && shape.width != null ? shape.width : 0.5
+}
+
+/** Выше сетки ли рагдолл (хотя бы центр туловища) — тогда разрешён мягкий заход на половину соперника. */
+function isRagdollAboveNet(ragdoll, netTopY) {
+  const y = ragdoll.upperBody?.position?.[1] ?? ragdoll.pelvis?.position?.[1]
+  return typeof y === 'number' && y > netTopY
+}
+
+/** Применяет выталкивающую силу над сеткой, если рагдолл зашёл на половину соперника дальше глубины корпуса. */
+function applyNetRepulsionForce(ragdoll, side) {
+  const netTopY = WORLD_BOTTOM + (getSettings().netHeight ?? 6)
+  if (!isRagdollAboveNet(ragdoll, netTopY)) return
+  const torsoDepth = getTorsoDepth(ragdoll)
+  const k = getSettings().netRepelForce ?? 120
+  if (side === 'left') {
+    let rightmost = -Infinity
+    for (const body of ragdoll.bodies) {
+      const { right } = getBodyXExtents(body)
+      rightmost = Math.max(rightmost, right)
+    }
+    if (rightmost <= torsoDepth) return
+    const over = rightmost - torsoDepth
+    const forceX = -k * over
+    for (const body of ragdoll.bodies) {
+      body.applyForce([forceX, 0])
+    }
+  } else {
+    let leftmost = Infinity
+    for (const body of ragdoll.bodies) {
+      const { left } = getBodyXExtents(body)
+      leftmost = Math.min(leftmost, left)
+    }
+    if (leftmost >= -torsoDepth) return
+    const over = -torsoDepth - leftmost
+    const forceX = k * over
+    for (const body of ragdoll.bodies) {
+      body.applyForce([forceX, 0])
+    }
+  }
+}
+
 function gameLoop(now) {
   requestAnimationFrame(gameLoop)
   const t = now / 1000
@@ -388,6 +449,8 @@ function gameLoop(now) {
       const gBall = s.ballGravity ?? s.gravityY
       ball.applyForce([0, -ball.mass * gBall])
     }
+    applyNetRepulsionForce(ragdoll1, 'left')
+    applyNetRepulsionForce(ragdoll2, 'right')
     world.step(FIXED_DT)
     if (ballRespawnFor !== null) {
       ballHeldBy = ballRespawnFor
