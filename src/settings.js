@@ -70,6 +70,40 @@ function loadPreset(name) {
   location.reload()
 }
 
+const SETTINGS_FILE_NAME = 'ragdoll-volley-settings.json'
+
+/** Export current settings to a downloadable text (JSON) file. */
+export function exportSettingsToFile() {
+  const text = JSON.stringify(current, null, 2)
+  const blob = new Blob([text], { type: 'application/json' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = SETTINGS_FILE_NAME
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
+/**
+ * Read a settings file, apply to current, save to localStorage, and reload.
+ * @param {File} file - Text file with JSON (e.g. from export).
+ */
+export function importSettingsFromFile(file) {
+  const reader = new FileReader()
+  reader.onload = () => {
+    try {
+      const parsed = JSON.parse(reader.result)
+      if (typeof parsed !== 'object' || parsed === null) throw new Error('Invalid format')
+      Object.assign(current, { ...defaults, ...parsed })
+      save()
+      location.reload()
+    } catch (e) {
+      alert('Invalid settings file: ' + (e.message || 'could not parse'))
+    }
+  }
+  reader.readAsText(file, 'utf-8')
+}
+
 export function getSettings() {
   return current
 }
@@ -293,6 +327,37 @@ export function initSettingsPanel() {
     setTimeout(() => { saveBtn.textContent = 'Сохранить настройки' }, 1500)
   })
   panel.appendChild(saveBtn)
+
+  const fileRow = document.createElement('div')
+  fileRow.className = 'setting-row'
+  fileRow.style.marginTop = '8px'
+  fileRow.style.flexWrap = 'wrap'
+  fileRow.style.gap = '8px'
+  const exportBtn = document.createElement('button')
+  exportBtn.type = 'button'
+  exportBtn.textContent = 'Export to file'
+  exportBtn.className = 'settings-save'
+  exportBtn.addEventListener('click', () => exportSettingsToFile())
+  const importInput = document.createElement('input')
+  importInput.type = 'file'
+  importInput.accept = '.json,.txt,application/json,text/plain'
+  importInput.style.display = 'none'
+  importInput.addEventListener('change', () => {
+    const file = importInput.files?.[0]
+    if (file) {
+      importSettingsFromFile(file)
+      importInput.value = ''
+    }
+  })
+  const importBtn = document.createElement('button')
+  importBtn.type = 'button'
+  importBtn.textContent = 'Import from file'
+  importBtn.className = 'settings-save'
+  importBtn.addEventListener('click', () => importInput.click())
+  fileRow.appendChild(exportBtn)
+  fileRow.appendChild(importBtn)
+  panel.appendChild(fileRow)
+  panel.appendChild(importInput)
 
   const presetRow = document.createElement('div')
   presetRow.className = 'setting-row'
