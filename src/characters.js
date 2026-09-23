@@ -1,5 +1,7 @@
 // Small, articulated illustrations drawn in the same local space as the bodies.
 // Keeping the artwork procedural lets every player-size setting stay sharp.
+import { ART, PHYS_SCALE } from './original.js'
+
 const TAU = Math.PI * 2
 
 const PLAYERS = [
@@ -16,11 +18,11 @@ const PLAYERS = [
 ]
 
 function position(body) {
-  return body.interpolatedPosition ?? body.position
+  return body.position
 }
 
 function angle(body) {
-  return body.interpolatedAngle ?? body.angle
+  return body.angle
 }
 
 function localPoint(body, x, y, view) {
@@ -69,10 +71,25 @@ function joint(ctx, x, y, radius, colors, back = false) {
   ctx.stroke()
 }
 
-function drawArm(ctx, upper, lower, sign, colors, k, view, back) {
+/**
+ * Arm = upper arm, forearm and hand. Segment lengths come from the original's
+ * sprite bounds rather than its collision boxes, which are shorter; the hand is
+ * drawn on the fingertip body so the arm ends where the physics ends.
+ */
+function drawArm(ctx, upper, lower, finger, sign, colors, k, view, back, au) {
   if (!upper || !lower) return
-  inBody(ctx, upper, k, view, () => {
-    const half = upper.shapes[0].width / k / 2
+  // The authored limb is 0.154 across plus its outline and end joints, so the
+  // sprite's height maps onto that outer thickness rather than the bare path.
+  const AUTHORED_THICKNESS = 0.194
+  const segment = (body, art, draw) => {
+    const half = au(art.w) / 2
+    inBody(ctx, body, k, view, () => {
+      ctx.scale(1, au(art.h) / AUTHORED_THICKNESS)
+      draw(half)
+    })
+  }
+
+  segment(upper, ART.arm, (half) => {
     const gradient = ctx.createLinearGradient(0, -0.085, 0, 0.085)
     gradient.addColorStop(0, back ? colors.back : colors.light)
     gradient.addColorStop(1, back ? colors.shade : colors.skin)
@@ -81,8 +98,8 @@ function drawArm(ctx, upper, lower, sign, colors, k, view, back) {
     fillStroke(ctx, gradient, colors.outline)
     joint(ctx, -sign * half, 0, 0.084, colors, back)
   })
-  inBody(ctx, lower, k, view, () => {
-    const half = lower.shapes[0].width / k / 2
+
+  segment(lower, ART.hand, (half) => {
     ctx.scale(sign, 1)
     ctx.beginPath()
     ctx.moveTo(-half, -0.072)
@@ -100,21 +117,47 @@ function drawArm(ctx, upper, lower, sign, colors, k, view, back) {
     ctx.lineWidth = 0.022
     ctx.stroke()
     joint(ctx, -half, 0, 0.076, colors, back)
-    ellipse(ctx, half + 0.03, 0, 0.085, 0.077, back ? colors.back : colors.skin, colors.outline)
+  })
+
+  if (!finger) return
+  // The hand sprite's box is measured across spread fingers; the palm that reads
+  // at this size is a good deal smaller than that.
+  const PALM = 0.62
+  const handW = au(ART.fingers.w * PALM) / 2
+  const handH = au(ART.fingers.h * PALM) / 2
+  inBody(ctx, finger, k, view, () => {
+    ctx.scale(sign, 1)
+    ellipse(ctx, 0, 0, handW, handH, back ? colors.back : colors.skin, colors.outline, 0.022)
     // Closed volleyball hand, with a thumb rather than separate tiny fingers.
     ctx.beginPath()
-    ctx.moveTo(half - 0.01, -0.008)
-    ctx.quadraticCurveTo(half + 0.04, -0.045, half + 0.07, -0.008)
+    ctx.moveTo(handW * 0.1, -handH * 0.1)
+    ctx.quadraticCurveTo(handW * 0.75, -handH * 0.62, handW * 0.95, -handH * 0.1)
     ctx.strokeStyle = colors.shade
     ctx.lineWidth = 0.017
     ctx.stroke()
   })
 }
 
-function drawLeg(ctx, upper, lower, foot, colors, k, view, back, facing) {
-  if (!upper || !lower) return
-  inBody(ctx, upper, k, view, () => {
-    const half = upper.shapes[0].height / k / 2
+/**
+ * Leg = thigh and shin-with-shoe. Both sprites are much longer than their
+ * colliders, so each is drawn at sprite length with its lower end pinned to the
+ * bottom of the collider — which keeps the sole on the sand and lets the thigh
+ * run up under the hips, the way the original's does.
+ */
+function drawLeg(ctx, thigh, shin, colors, k, view, back, facing, au) {
+  if (!thigh || !shin) return
+  const segment = (body, art, authoredHalfWidth, draw) => {
+    const colliderHalf = body.shapes[0].height / k / 2
+    const half = au(art.h) / 2
+    const widen = au(art.w) / 2 / authoredHalfWidth
+    inBody(ctx, body, k, view, () => {
+      ctx.translate(0, colliderHalf - half)
+      ctx.scale(widen, 1)
+      draw(half)
+    })
+  }
+
+  segment(thigh, ART.leg, 0.105, (half) => {
     ctx.beginPath()
     ctx.moveTo(-0.105, -half)
     ctx.quadraticCurveTo(0, -half - 0.09, 0.105, -half)
@@ -128,8 +171,9 @@ function drawLeg(ctx, upper, lower, foot, colors, k, view, back, facing) {
     gradient.addColorStop(1, back ? colors.back : colors.skin)
     fillStroke(ctx, gradient, colors.outline)
   })
-  inBody(ctx, lower, k, view, () => {
-    const half = lower.shapes[0].height / k / 2
+
+  let ankle = null
+  segment(shin, ART.foot, 0.075, (half) => {
     ctx.beginPath()
     ctx.moveTo(-0.075, -half)
     ctx.quadraticCurveTo(0, -half - 0.058, 0.075, -half)
@@ -145,16 +189,15 @@ function drawLeg(ctx, upper, lower, foot, colors, k, view, back, facing) {
     ctx.lineWidth = 0.024
     ctx.stroke()
     joint(ctx, 0, -half, 0.079, colors, back)
+    ankle = half
   })
 
-  // The small ankle bodies are physical weights; use their positions but the
-  // shin's orientation, so a freely spinning circular weight cannot spin a shoe.
-  const ankle = foot
-    ? localPoint(foot, 0, 0, view)
-    : localPoint(lower, 0, -lower.shapes[0].height / 2, view)
+  // The shoe sits at the bottom of the shin sprite, following the shin's angle.
+  const shinHalf = shin.shapes[0].height / k / 2
+  const sole = localPoint(shin, 0, -shinHalf, view)
   ctx.save()
-  ctx.translate(ankle.x, ankle.y)
-  ctx.rotate(-angle(lower))
+  ctx.translate(sole.x, sole.y)
+  ctx.rotate(-angle(shin))
   ctx.scale(k * view.scale * facing, k * view.scale)
   ctx.beginPath()
   ctx.moveTo(-0.066, -0.045)
@@ -355,26 +398,26 @@ function drawHead(ctx, body, colors, k, view, playerIndex, facing) {
 }
 
 /**
- * Render one adult beach-volleyball player, following the interpolated physics.
+ * Draws one player from the original game's thirteen parts. Limb artwork follows
+ * the real bodies; only the torso, hips and head carry hand-drawn detail.
  * @param {CanvasRenderingContext2D} ctx
- * @param {ReturnType<import('./ragdoll.js').createRagdoll>} ragdoll
+ * @param {Record<string, {position:number[], angle:number, shapes:object[]}>} parts
  * @param {number} playerIndex 0 = coral / bob; 1 = blue / ponytail
  * @param {{scale:number, centerX:number, centerY:number, floorY:number}} view
  */
-export function drawRagdoll(ctx, ragdoll, playerIndex, view) {
-  if (!ragdoll.head || !ragdoll.upperBody || !ragdoll.pelvis) return
+export function drawRagdoll(ctx, parts, playerIndex, view) {
+  if (!parts.Head || !parts.Tors || !parts.Ass) return
   const colors = PLAYERS[playerIndex % PLAYERS.length]
   const facing = playerIndex === 1 ? -1 : 1
-  const k = (ragdoll.head.shapes[0]?.radius ?? 0.25) / 0.25
+  const k = (parts.Head.shapes[0]?.radius ?? 0.25) / 0.25
   const backSide = playerIndex === 1 ? 'Right' : 'Left'
   const frontSide = playerIndex === 1 ? 'Left' : 'Right'
-  const body = (part, side) => ragdoll[`${part}${side}`]
 
   ctx.save()
   ctx.lineJoin = 'round'
   ctx.lineCap = 'round'
 
-  const p = position(ragdoll.pelvis)
+  const p = position(parts.Ass)
   const x = view.centerX + p[0] * view.scale
   const lift = Math.max(0, view.floorY - (view.centerY - p[1] * view.scale) - 1.2 * k * view.scale)
   const shadowAlpha = Math.max(0.055, 0.21 - lift / (view.scale * 12))
@@ -383,14 +426,21 @@ export function drawRagdoll(ctx, ragdoll, playerIndex, view) {
   ctx.ellipse(x, view.floorY + 0.045 * k * view.scale, 0.68 * k * view.scale, 0.095 * k * view.scale, 0, 0, TAU)
   ctx.fill()
 
-  const arm = (side, back) => drawArm(ctx, body('upper', `${side}Arm`), body('lower', `${side}Arm`), side === 'Left' ? -1 : 1, colors, k, view, back)
-  const leg = (side, back) => drawLeg(ctx, body('upper', `${side}Leg`), body('lower', `${side}Leg`), ragdoll[`${side.toLowerCase()}Weight`], colors, k, view, back, facing)
+  // One art unit is k metres, so this converts the original's sprite sizes,
+  // which are in stage pixels, into the units the artwork is drawn in.
+  const au = (px) => px / (k * PHYS_SCALE)
+
+  // Arm -> upper arm, Hand -> forearm, Finger -> hand.
+  const arm = (side, back) => drawArm(ctx, parts['Arm' + side], parts['Hand' + side], parts['Finger' + side], side === 'Left' ? -1 : 1, colors, k, view, back, au)
+  // Leg -> thigh, Foot -> shin; the shoe is drawn at the bottom of the shin.
+  const leg = (side, back) => drawLeg(ctx, parts['Leg' + side], parts['Foot' + side], colors, k, view, back, facing, au)
+
   arm(backSide, true)
   leg(backSide, true)
   leg(frontSide, false)
-  drawPelvis(ctx, ragdoll.pelvis, colors, k, view)
-  drawTorso(ctx, ragdoll.upperBody, colors, k, view)
+  drawPelvis(ctx, parts.Ass, colors, k, view)
+  drawTorso(ctx, parts.Tors, colors, k, view)
   arm(frontSide, false)
-  drawHead(ctx, ragdoll.head, colors, k, view, playerIndex, facing)
+  drawHead(ctx, parts.Head, colors, k, view, playerIndex, facing)
   ctx.restore()
 }

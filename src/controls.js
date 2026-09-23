@@ -1,81 +1,75 @@
-// Player 1: WASD + S (down)
-const keysP1 = { left: false, right: false, jump: false, down: false }
-// Player 2: Arrow keys
-const keysP2 = { left: false, right: false, jump: false, down: false }
+import * as pl from 'planck'
+import { MOVE } from './original.js'
 
-const stateP1 = { jumpConsumed: true, airJumpConsumed: true, wasInAir: false }
-const stateP2 = { jumpConsumed: true, airJumpConsumed: true, wasInAir: false }
+/**
+ * The original's `control` class. Player 1 (left) is on the arrow keys and
+ * space, player 2 (right) is on WASD and R, and the key state is just a table of
+ * key codes the way the original's key_stack is.
+ */
+const LEFT = 37
+const UP = 38
+const RIGHT = 39
+const DOWN = 40
+const SPACE = 32
+const KEY_A = 65
+const KEY_D = 68
+const KEY_W = 87
+const KEY_S = 83
+const KEY_R = 82
+
+const CODE_TO_KEY = {
+  ArrowLeft: LEFT,
+  ArrowUp: UP,
+  ArrowRight: RIGHT,
+  ArrowDown: DOWN,
+  Space: SPACE,
+  KeyA: KEY_A,
+  KeyD: KEY_D,
+  KeyW: KEY_W,
+  KeyS: KEY_S,
+  KeyR: KEY_R,
+}
+
+const PREVENT_DEFAULT = new Set(['ArrowLeft', 'ArrowUp', 'ArrowRight', 'ArrowDown', 'Space'])
+
+const keyStack = {}
 
 export function initControls() {
   window.addEventListener('keydown', (e) => {
-    if (e.code === 'KeyA') keysP1.left = true
-    if (e.code === 'KeyD') keysP1.right = true
-    if (e.code === 'KeyW') {
-      e.preventDefault()
-      keysP1.jump = true
-      stateP1.jumpConsumed = false
-    }
-    if (e.code === 'KeyS') keysP1.down = true
-    if (e.code === 'ArrowLeft') keysP2.left = true
-    if (e.code === 'ArrowRight') keysP2.right = true
-    if (e.code === 'ArrowUp') {
-      e.preventDefault()
-      keysP2.jump = true
-      stateP2.jumpConsumed = false
-    }
-    if (e.code === 'ArrowDown') keysP2.down = true
+    const code = CODE_TO_KEY[e.code]
+    if (code == null) return
+    if (PREVENT_DEFAULT.has(e.code)) e.preventDefault()
+    keyStack[code] = true
   })
   window.addEventListener('keyup', (e) => {
-    if (e.code === 'KeyA') keysP1.left = false
-    if (e.code === 'KeyD') keysP1.right = false
-    if (e.code === 'KeyW') keysP1.jump = false
-    if (e.code === 'KeyS') keysP1.down = false
-    if (e.code === 'ArrowLeft') keysP2.left = false
-    if (e.code === 'ArrowRight') keysP2.right = false
-    if (e.code === 'ArrowUp') keysP2.jump = false
-    if (e.code === 'ArrowDown') keysP2.down = false
+    const code = CODE_TO_KEY[e.code]
+    if (code == null) return
+    keyStack[code] = false
+  })
+  window.addEventListener('blur', () => {
+    for (const k of Object.keys(keyStack)) keyStack[k] = false
   })
 }
 
+export function disableControls() {
+  for (const k of Object.keys(keyStack)) keyStack[k] = false
+}
+
 /**
- * Apply control forces/impulses to ragdoll. Call before world.step each frame.
- * @param {{ pelvis: import('p2-es').Body, upperBody: import('p2-es').Body, head: import('p2-es').Body }} ragdoll
- * @param {{ moveForce: number, jumpImpulse: number }} settings
- * @param {{ isOnGround: boolean }} context
- * @param {'p1'|'p2'} keySet - 'p1' = WASD, 'p2' = Arrow keys
+ * control::update — run once per frame per player. Movement and the downward
+ * stamp repeat while held; the jump is consumed so it needs a fresh press.
  */
-export function applyControls(ragdoll, settings, context, keySet) {
-  const keys = keySet === 'p2' ? keysP2 : keysP1
-  const state = keySet === 'p2' ? stateP2 : stateP1
-  const { pelvis, upperBody, head } = ragdoll
-  const moveForce = settings.moveForce ?? (settings.movementSpeed != null ? settings.movementSpeed * 33 : 40)
-  const jumpImpulse = settings.jumpImpulse
-  const isOnGround = context?.isOnGround ?? true
-  if (isOnGround && state.wasInAir) {
-    state.jumpConsumed = false
-    state.airJumpConsumed = false
-  }
-  state.wasInAir = !isOnGround
+export function applyControls(player, ball) {
+  const keys = player.id === 1
+    ? { jump: UP, down: DOWN, left: LEFT, right: RIGHT, serve: SPACE }
+    : { jump: KEY_W, down: KEY_S, left: KEY_A, right: KEY_D, serve: KEY_R }
 
-  if (keys.left) head.applyForce([-moveForce, 0])
-  if (keys.right) head.applyForce([moveForce, 0])
-  const downForce = settings.downForce ?? 40
-  if (keys.down) head.applyForce([0, -downForce])
-
-  if (keys.jump) {
-    if (isOnGround && !state.jumpConsumed) {
-      pelvis.applyImpulse([0, jumpImpulse])
-      upperBody.applyImpulse([0, jumpImpulse * 0.6])
-      pelvis.angularVelocity *= 0.4
-      upperBody.angularVelocity *= 0.4
-      state.jumpConsumed = true
-    } else if (!isOnGround && !state.airJumpConsumed) {
-      const halfImpulse = jumpImpulse * 0.5
-      pelvis.applyImpulse([0, halfImpulse])
-      upperBody.applyImpulse([0, halfImpulse * 0.6])
-      pelvis.angularVelocity *= 0.4
-      upperBody.angularVelocity *= 0.4
-      state.airJumpConsumed = true
-    }
+  if (keyStack[keys.jump]) {
+    player.jump()
+    keyStack[keys.jump] = false
   }
+  if (keyStack[keys.down]) player.turnDown()
+  if (keyStack[keys.left]) player.turn(pl.Vec2(-MOVE.turnImpulse, 0))
+  if (keyStack[keys.right]) player.turn(pl.Vec2(MOVE.turnImpulse, 0))
+  if (keyStack[keys.serve]) player.pas(ball)
 }

@@ -1,25 +1,26 @@
+import { MOVE, BALL, GRAVITY_Y, TIME_STEP } from './original.js'
+
 const STORAGE_KEY = 'ragdoll-volley-settings'
 const PRESETS_KEY = 'ragdoll-volley-presets'
 
+/**
+ * Defaults are the original game's own values (see original.js). Anything moved
+ * off a default is a deliberate departure from the Flash game.
+ */
 const defaults = {
-  gravityY: 6.5,
-  headLiftForce: 50,
-  throwSpeed: 14,
-  ballGravity: 3.5,
-  ballRestitution: 2,
-  jumpImpulse: 40,
-  downForce: 40,
-  moveForce: 40,
-  bounceDamping: 0.8,
-  playerBounceStrength: 0.45,
-  ballSize: 0.3,
-  diskSize: 0.5,
-  movementSpeed: 1.2,
-  netHeight: 6,
-  netRepelForce: 120,
-  playerSize: 1,
-  throwTorsoCoef: 1,
+  gravityY: GRAVITY_Y,
+  timeStep: TIME_STEP,
+  turnImpulse: MOVE.turnImpulse,
+  jumpImpulse: MOVE.jumpImpulse,
+  jumpBodyImpulse: MOVE.jumpBodyImpulse,
+  downImpulse: MOVE.downImpulse,
+  ballMaxVX: BALL.maxVX,
+  ballMaxVY: BALL.maxVY,
+  ballTouchImpulse: 1,
+  diskSize: 15,
 }
+
+export const ORIGINAL_DEFAULTS = { ...defaults }
 
 let current = { ...defaults }
 
@@ -55,14 +56,12 @@ function savePresets(presets) {
   } catch (_) {}
 }
 
-/** Сохранить текущие настройки как пресет с именем name. */
 function saveAsPreset(name) {
   const presets = getPresets()
   presets[name] = { ...current }
   savePresets(presets)
 }
 
-/** Загрузить пресет в текущие настройки, сохранить и перезагрузить страницу. */
 function loadPreset(name) {
   const presets = getPresets()
   const data = presets[name]
@@ -74,7 +73,6 @@ function loadPreset(name) {
 
 const SETTINGS_FILE_NAME = 'ragdoll-volley-settings.json'
 
-/** Export current settings to a downloadable text (JSON) file. */
 export function exportSettingsToFile() {
   const text = JSON.stringify(current, null, 2)
   const blob = new Blob([text], { type: 'application/json' })
@@ -86,10 +84,6 @@ export function exportSettingsToFile() {
   URL.revokeObjectURL(url)
 }
 
-/**
- * Read a settings file, apply to current, save to localStorage, and reload.
- * @param {File} file - Text file with JSON (e.g. from export).
- */
 export function importSettingsFromFile(file) {
   const reader = new FileReader()
   reader.onload = () => {
@@ -114,7 +108,17 @@ export function setSettings(partial) {
   Object.assign(current, partial)
 }
 
-function slider(id, label, min, max, step, getValue, setValue) {
+/** Push tunable values back into the shared physics constants. */
+export function applyTuning(s) {
+  MOVE.turnImpulse = s.turnImpulse
+  MOVE.jumpImpulse = s.jumpImpulse
+  MOVE.jumpBodyImpulse = s.jumpBodyImpulse
+  MOVE.downImpulse = s.downImpulse
+  BALL.maxVX = s.ballMaxVX
+  BALL.maxVY = s.ballMaxVY
+}
+
+function slider(id, label, min, max, step, getValue, setValue, onChange) {
   const wrap = document.createElement('div')
   wrap.className = 'setting-row'
   const labelEl = document.createElement('label')
@@ -129,11 +133,13 @@ function slider(id, label, min, max, step, getValue, setValue) {
   input.max = max
   input.step = step || (max - min < 5 ? 0.1 : 1)
   input.value = getValue()
-  valueEl.textContent = getValue()
+  const show = (v) => { valueEl.textContent = Number.isInteger(v) ? v : Number(v).toFixed(3).replace(/0+$/, '').replace(/\.$/, '') }
+  show(getValue())
   input.addEventListener('input', () => {
     const v = parseFloat(input.value)
     setValue(v)
-    valueEl.textContent = typeof v === 'number' && v % 1 !== 0 ? v.toFixed(1) : v
+    show(v)
+    onChange?.()
   })
   wrap.appendChild(labelEl)
   wrap.appendChild(valueEl)
@@ -141,212 +147,56 @@ function slider(id, label, min, max, step, getValue, setValue) {
   return wrap
 }
 
-function load() {
-  loadFromStorage()
-}
+loadFromStorage()
 
-load()
-
-export function initSettingsPanel() {
-
+export function initSettingsPanel(onChange) {
   const panel = document.createElement('aside')
   panel.className = 'settings-panel closed'
   panel.setAttribute('aria-hidden', 'true')
-  panel.innerHTML = '<h3>Настройки</h3><p class="controls-hint">Игрок 1 (слева): W — прыжок, S — вниз, A/D — влево/вправо, R — бросок.<br>Игрок 2 (справа): ↑ — прыжок, ↓ — вниз, ←/→ — влево/вправо, Enter — бросок.</p>'
+  panel.innerHTML =
+    '<h3>Настройки</h3>' +
+    '<p class="controls-hint">Игрок 1 (слева): ← → — движение, ↑ — прыжок, ↓ — вниз, пробел — подача.<br>' +
+    'Игрок 2 (справа): A/D — движение, W — прыжок, S — вниз, R — подача.<br>' +
+    'Значения по умолчанию взяты из оригинальной флеш-игры.</p>'
 
-  panel.appendChild(
-    slider(
-      'gravity',
-      'Гравитация',
-      2,
-      25,
-      0.5,
-      () => current.gravityY,
-      (v) => { current.gravityY = v }
+  const rows = [
+    ['gravityY', 'Гравитация (перезапуск)', 2, 25, 0.5, 'gravityY'],
+    ['timeStep', 'Шаг физики (перезапуск)', 0.01, 0.06, 0.001, 'timeStep'],
+    ['turnImpulse', 'Импульс движения', 0, 12, 0.5, 'turnImpulse'],
+    ['jumpImpulse', 'Импульс прыжка', 0, 12, 0.5, 'jumpImpulse'],
+    ['jumpBodyImpulse', 'Импульс прыжка (корпус)', 0, 30, 0.5, 'jumpBodyImpulse'],
+    ['downImpulse', 'Импульс вниз', 0, 6, 0.25, 'downImpulse'],
+    ['ballMaxVX', 'Предел скорости мяча по X', 5, 40, 1, 'ballMaxVX'],
+    ['ballMaxVY', 'Предел скорости мяча по Y', 5, 40, 1, 'ballMaxVY'],
+    ['ballTouchImpulse', 'Подброс мяча при касании', 0, 4, 0.1, 'ballTouchImpulse'],
+    ['diskSize', 'Размер диска', 5, 40, 1, 'diskSize'],
+  ]
+  for (const [id, label, min, max, step, key] of rows) {
+    panel.appendChild(
+      slider(id, label, min, max, step, () => current[key], (v) => { current[key] = v }, () => {
+        applyTuning(current)
+        onChange?.()
+      })
     )
-  )
-  panel.appendChild(
-    slider(
-      'headLiftForce',
-      'Сила подъёма головы',
-      0,
-      120,
-      1,
-      () => current.headLiftForce,
-      (v) => { current.headLiftForce = v }
-    )
-  )
-  panel.appendChild(
-    slider(
-      'throwSpeed',
-      'Сила броска (базовая)',
-      1,
-      40,
-      1,
-      () => current.throwSpeed,
-      (v) => { current.throwSpeed = v }
-    )
-  )
-  panel.appendChild(
-    slider(
-      'throwTorsoCoef',
-      'Коэф. силы от туловища',
-      0.2,
-      3,
-      0.1,
-      () => current.throwTorsoCoef,
-      (v) => { current.throwTorsoCoef = v }
-    )
-  )
-  panel.appendChild(
-    slider(
-      'netHeight',
-      'Высота сетки',
-      2,
-      18,
-      0.5,
-      () => current.netHeight,
-      (v) => { current.netHeight = v }
-    )
-  )
-  panel.appendChild(
-    slider(
-      'netRepelForce',
-      'Выталкивание с чужой площадки',
-      0,
-      300,
-      5,
-      () => current.netRepelForce,
-      (v) => { current.netRepelForce = v }
-    )
-  )
-  panel.appendChild(
-    slider(
-      'ballGravity',
-      'Гравитация мяча',
-      0,
-      25,
-      0.5,
-      () => current.ballGravity,
-      (v) => { current.ballGravity = v }
-    )
-  )
-  panel.appendChild(
-    slider(
-      'bounceDamping',
-      'Эластичность',
-      0.1,
-      1,
-      0.05,
-      () => current.bounceDamping,
-      (v) => { current.bounceDamping = v }
-    )
-  )
-  panel.appendChild(
-    slider(
-      'playerBounceStrength',
-      'Отскок от игрока (0–1)',
-      0,
-      1,
-      0.05,
-      () => current.playerBounceStrength,
-      (v) => { current.playerBounceStrength = v }
-    )
-  )
-  panel.appendChild(
-    slider(
-      'ballSize',
-      'Размер мяча',
-      0.15,
-      0.5,
-      0.05,
-      () => current.ballSize,
-      (v) => { current.ballSize = v }
-    )
-  )
-  panel.appendChild(
-    slider(
-      'diskSize',
-      'Размер диска',
-      0.2,
-      1.5,
-      0.1,
-      () => current.diskSize,
-      (v) => { current.diskSize = v }
-    )
-  )
-  panel.appendChild(
-    slider(
-      'playerSize',
-      'Размер игрока',
-      0.5,
-      1.5,
-      0.05,
-      () => current.playerSize,
-      (v) => { current.playerSize = v }
-    )
-  )
-  panel.appendChild(
-    slider(
-      'movementSpeed',
-      'Скорость движения',
-      0.5,
-      3,
-      0.1,
-      () => current.movementSpeed,
-      (v) => { current.movementSpeed = v }
-    )
-  )
-  panel.appendChild(
-    slider(
-      'ballRestitution',
-      'Прыгучесть мяча',
-      0,
-      100,
-      0.05,
-      () => current.ballRestitution,
-      (v) => { current.ballRestitution = v }
-    )
-  )
-  panel.appendChild(
-    slider(
-      'jump',
-      'Сила прыжка (таз)',
-      5,
-      80,
-      0.5,
-      () => current.jumpImpulse,
-      (v) => { current.jumpImpulse = v }
-    )
-  )
-  panel.appendChild(
-    slider(
-      'downForce',
-      'Сила вниз',
-      0,
-      120,
-      5,
-      () => current.downForce,
-      (v) => { current.downForce = v }
-    )
-  )
-  panel.appendChild(
-    slider(
-      'move',
-      'Сила движения',
-      0,
-      100,
-      1,
-      () => current.moveForce,
-      (v) => { current.moveForce = v }
-    )
-  )
+  }
 
-  const saveBtn = document.createElement('button')
-  saveBtn.type = 'button'
-  saveBtn.textContent = 'Сохранить настройки'
-  saveBtn.className = 'settings-save'
-  saveBtn.addEventListener('click', () => {
+  const button = (text, handler) => {
+    const b = document.createElement('button')
+    b.type = 'button'
+    b.textContent = text
+    b.className = 'settings-save'
+    b.addEventListener('click', handler)
+    return b
+  }
+
+  const resetBtn = button('Вернуть оригинальные значения', () => {
+    Object.assign(current, ORIGINAL_DEFAULTS)
+    save()
+    location.reload()
+  })
+  panel.appendChild(resetBtn)
+
+  const saveBtn = button('Сохранить настройки', () => {
     save()
     saveBtn.textContent = 'Сохранено'
     setTimeout(() => { saveBtn.textContent = 'Сохранить настройки' }, 1500)
@@ -358,11 +208,6 @@ export function initSettingsPanel() {
   fileRow.style.marginTop = '8px'
   fileRow.style.flexWrap = 'wrap'
   fileRow.style.gap = '8px'
-  const exportBtn = document.createElement('button')
-  exportBtn.type = 'button'
-  exportBtn.textContent = 'Export to file'
-  exportBtn.className = 'settings-save'
-  exportBtn.addEventListener('click', () => exportSettingsToFile())
   const importInput = document.createElement('input')
   importInput.type = 'file'
   importInput.accept = '.json,.txt,application/json,text/plain'
@@ -374,13 +219,8 @@ export function initSettingsPanel() {
       importInput.value = ''
     }
   })
-  const importBtn = document.createElement('button')
-  importBtn.type = 'button'
-  importBtn.textContent = 'Import from file'
-  importBtn.className = 'settings-save'
-  importBtn.addEventListener('click', () => importInput.click())
-  fileRow.appendChild(exportBtn)
-  fileRow.appendChild(importBtn)
+  fileRow.appendChild(button('Export to file', () => exportSettingsToFile()))
+  fileRow.appendChild(button('Import from file', () => importInput.click()))
   panel.appendChild(fileRow)
   panel.appendChild(importInput)
 
@@ -388,30 +228,16 @@ export function initSettingsPanel() {
   presetRow.className = 'setting-row'
   presetRow.style.marginTop = '12px'
   presetRow.style.flexWrap = 'wrap'
-  const saveBallzBtn = document.createElement('button')
-  saveBallzBtn.type = 'button'
-  saveBallzBtn.textContent = 'Сохранить как пресет Ballz'
-  saveBallzBtn.className = 'settings-save'
-  saveBallzBtn.addEventListener('click', () => {
+  const saveBallzBtn = button('Сохранить как пресет Ballz', () => {
     saveAsPreset('Ballz')
     saveBallzBtn.textContent = 'Сохранено в Ballz'
     setTimeout(() => { saveBallzBtn.textContent = 'Сохранить как пресет Ballz' }, 1500)
   })
-  const loadBallzBtn = document.createElement('button')
-  loadBallzBtn.type = 'button'
-  loadBallzBtn.textContent = 'Вернуть пресет Ballz'
-  loadBallzBtn.className = 'settings-save'
-  loadBallzBtn.addEventListener('click', () => loadPreset('Ballz'))
   presetRow.appendChild(saveBallzBtn)
-  presetRow.appendChild(loadBallzBtn)
+  presetRow.appendChild(button('Вернуть пресет Ballz', () => loadPreset('Ballz')))
   panel.appendChild(presetRow)
 
-  const restartBtn = document.createElement('button')
-  restartBtn.type = 'button'
-  restartBtn.textContent = 'Restart game'
-  restartBtn.className = 'settings-save'
-  restartBtn.addEventListener('click', () => location.reload())
-  panel.appendChild(restartBtn)
+  panel.appendChild(button('Restart game', () => location.reload()))
 
   const app = document.querySelector('#app')
   app.appendChild(panel)
