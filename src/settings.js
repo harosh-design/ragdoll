@@ -13,6 +13,7 @@ const defaults = {
   bounceDamping: 0.8,
   playerBounceStrength: 0.45,
   ballSize: 0.3,
+  diskSize: 0.5,
   movementSpeed: 1.2,
   netHeight: 6,
   netRepelForce: 120,
@@ -261,6 +262,17 @@ export function initSettingsPanel() {
       0.05,
       () => current.ballSize,
       (v) => { current.ballSize = v }
+    )
+  )
+  panel.appendChild(
+    slider(
+      'diskSize',
+      'Размер диска',
+      0.2,
+      1.5,
+      0.1,
+      () => current.diskSize,
+      (v) => { current.diskSize = v }
     )
   )
   panel.appendChild(

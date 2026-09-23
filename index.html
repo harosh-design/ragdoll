@@ -1,77 +1,106 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ru">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Ragdoll Volley - Scene</title>
+    <title>Ragdoll Volley — Пляж</title>
     <style>
       * { margin: 0; padding: 0; box-sizing: border-box; }
-      body { overflow: hidden; background: #000; font-family: system-ui, sans-serif; }
-      #app { position: relative; width: 100vw; height: 100vh; overflow: hidden; }
-      canvas { display: block; width: 100%; height: 100%; background: #16213e; }
+      body { overflow: hidden; background: #f6c88c; color: #294c60; font-family: system-ui, sans-serif; }
+      #app { position: relative; width: 100vw; height: 100vh; height: 100dvh; overflow: hidden; }
+      canvas { display: block; width: 100%; height: 100%; background: #79b7d9; outline: none; }
+      canvas:focus-visible { outline: 2px solid rgba(255, 246, 214, 0.7); outline-offset: -2px; }
       .settings-toggle {
         position: fixed;
-        top: 8px;
-        right: 8px;
+        top: max(16px, env(safe-area-inset-top));
+        right: max(16px, env(safe-area-inset-right));
         z-index: 11;
-        width: 40px;
-        height: 40px;
-        border: none;
-        border-radius: 8px;
-        background: rgba(15, 52, 96, 0.9);
-        color: #eee;
-        font-size: 1.25rem;
+        width: 44px;
+        height: 44px;
+        border: 1px solid rgba(255, 255, 255, 0.78);
+        border-radius: 15px;
+        background: rgba(255, 247, 224, 0.8);
+        color: #385b70;
+        font-size: 1.4rem;
         cursor: pointer;
         display: flex;
         align-items: center;
         justify-content: center;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+        box-shadow: 0 4px 16px rgba(84, 72, 57, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.6);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        transition: background 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
       }
-      .settings-toggle:hover { background: rgba(15, 52, 96, 1); }
+      .settings-toggle:hover { background: #fff8e7; transform: translateY(-1px); box-shadow: 0 6px 20px rgba(84, 72, 57, 0.18); }
+      .settings-toggle:active { transform: translateY(1px); }
       .settings-panel {
         position: fixed;
-        top: 0;
-        right: 0;
-        width: 220px;
-        max-height: 100vh;
+        top: max(8px, env(safe-area-inset-top));
+        right: max(8px, env(safe-area-inset-right));
+        width: min(300px, calc(100vw - 16px));
+        max-height: calc(100vh - 16px);
+        max-height: calc(100dvh - max(8px, env(safe-area-inset-top)) - max(8px, env(safe-area-inset-bottom)));
         overflow-y: auto;
-        background: rgba(15, 52, 96, 0.95);
-        color: #eee;
-        padding: 16px;
+        overscroll-behavior: contain;
+        background: rgba(255, 248, 230, 0.97);
+        color: #294c60;
+        padding: 20px;
         display: flex;
         flex-direction: column;
-        gap: 12px;
-        border-left: 1px solid #0f3460;
+        gap: 16px;
+        border: 1px solid rgba(255, 255, 255, 0.86);
+        border-radius: 22px;
         z-index: 10;
-        transition: transform 0.2s ease-out;
-        box-shadow: -4px 0 16px rgba(0,0,0,0.2);
+        transition: transform 0.2s ease-out, visibility 0.2s;
+        box-shadow: 0 12px 48px rgba(58, 70, 74, 0.22), inset 0 1px 0 #fff;
+        backdrop-filter: blur(18px);
+        -webkit-backdrop-filter: blur(18px);
+        scrollbar-width: thin;
+        scrollbar-color: #d9b88a transparent;
       }
       .settings-panel.closed {
-        transform: translateX(100%);
+        transform: translateX(calc(100% + 24px));
+        visibility: hidden;
         pointer-events: none;
       }
-      .settings-panel h3 { font-size: 1rem; margin-bottom: 8px; }
-      .controls-hint { font-size: 0.8rem; opacity: 0.9; margin-bottom: 12px; line-height: 1.3; }
+      .settings-panel h3 { min-height: 30px; padding-right: 42px; font-size: 1.1rem; font-weight: 750; letter-spacing: -0.02em; }
+      .controls-hint { padding: 12px; border: 1px solid #e8d5b9; border-radius: 12px; background: #f5ead6; color: #526473; font-size: 0.77rem; line-height: 1.65; }
       .setting-row {
         display: flex;
         flex-wrap: wrap;
         align-items: center;
         gap: 8px;
       }
-      .setting-row label { flex: 0 0 100%; font-size: 0.85rem; }
-      .setting-value { min-width: 2.5rem; font-size: 0.9rem; }
-      .setting-row input[type="range"] { flex: 1; min-width: 0; }
+      .setting-row label { flex: 0 0 100%; font-size: 0.8rem; font-weight: 600; line-height: 1.4; }
+      .setting-value { min-width: 3rem; padding: 4px 6px; border-radius: 7px; background: #efe1c9; color: #355971; font-size: 0.8rem; font-variant-numeric: tabular-nums; text-align: center; }
+      .setting-row input[type="range"] { flex: 1; min-width: 0; height: 24px; accent-color: #358aa0; cursor: pointer; }
       .settings-save {
-        margin-top: auto;
-        padding: 8px 12px;
-        background: #e94560;
+        flex-shrink: 0;
+        min-height: 40px;
+        padding: 10px 12px;
+        background: #347d91;
         color: #fff;
-        border: none;
-        border-radius: 6px;
+        border: 1px solid #2f7083;
+        border-radius: 11px;
         cursor: pointer;
-        font-size: 0.9rem;
+        font: inherit;
+        font-size: 0.8rem;
+        font-weight: 650;
+        line-height: 1.4;
+        box-shadow: 0 2px 3px rgba(34, 69, 77, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.15);
+        transition: background 0.15s ease, transform 0.15s ease;
       }
-      .settings-save:hover { background: #ff6b6b; }
+      .setting-row .settings-save { flex: 1 1 105px; }
+      .settings-save:hover { background: #286b80; }
+      .settings-save:active { transform: translateY(1px); }
+      .settings-toggle:focus-visible, .settings-save:focus-visible, .setting-row input:focus-visible { outline: 3px solid #de843c; outline-offset: 3px; }
+      @media (max-height: 480px) {
+        .settings-panel { padding: 16px; gap: 12px; }
+        .controls-hint { padding: 10px; }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .settings-toggle, .settings-panel, .settings-save { transition: none; }
+      }
     </style>
   </head>
   <body>

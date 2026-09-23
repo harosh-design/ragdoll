@@ -21,6 +21,8 @@ export const BODYPARTS_P2 = Math.pow(2, 3)
 export const BODYPARTS = BODYPARTS_P1 | BODYPARTS_P2
 export const GROUND = Math.pow(2, 4)
 export const OTHER = Math.pow(2, 5)
+export const BUTTON = Math.pow(2, 6)
+export const DISK = Math.pow(2, 7)
 
 /**
  * Create a ragdoll and add it to the world. Returns refs to bodies for control.
@@ -29,12 +31,15 @@ export const OTHER = Math.pow(2, 5)
  * @param {number} [offsetX] - смещение по X для размещения левого/правого игрока
  * @param {number} [scale=1] - масштаб размера игрока (0.5 = половина, 1.5 = полтора)
  * @param {1|2} [playerId=1] - 1 или 2: коллизия только с телом другого игрока, не со своими суставами
- * @returns {{ bodies: p2.Body[], pelvis: p2.Body, upperBody: p2.Body, head: p2.Body, lowerLeftArm: p2.Body, lowerRightArm: p2.Body }}
+ * @returns {{ bodies: p2.Body[], pelvis: p2.Body, upperBody: p2.Body, head: p2.Body,
+ * upperLeftArm: p2.Body, upperRightArm: p2.Body, lowerLeftArm: p2.Body, lowerRightArm: p2.Body,
+ * upperLeftLeg: p2.Body, upperRightLeg: p2.Body, lowerLeftLeg: p2.Body, lowerRightLeg: p2.Body,
+ * leftWeight: p2.Body, rightWeight: p2.Body }}
  */
 export function createRagdoll(world, groundY, offsetX, scale = 1, playerId = 1) {
   const group = playerId === 2 ? BODYPARTS_P2 : BODYPARTS_P1
   const otherPlayer = playerId === 2 ? BODYPARTS_P1 : BODYPARTS_P2
-  const mask = GROUND | OTHER | otherPlayer
+  const mask = GROUND | OTHER | otherPlayer | DISK
   const k = scale
   const shouldersDistance = BASE_SHOULDERS * k
   const upperArmLength = BASE_UPPER_ARM_LENGTH * k
@@ -338,5 +343,20 @@ export function createRagdoll(world, groundY, offsetX, scale = 1, playerId = 1) 
     }
   }
 
-  return { bodies, pelvis, upperBody, head, lowerRightArm, lowerLeftArm }
+  return {
+    bodies,
+    pelvis,
+    upperBody,
+    head,
+    upperLeftArm,
+    upperRightArm,
+    lowerLeftArm,
+    lowerRightArm,
+    upperLeftLeg,
+    upperRightLeg,
+    lowerLeftLeg,
+    lowerRightLeg,
+    leftWeight,
+    rightWeight,
+  }
 }

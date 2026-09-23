@@ -1,19 +1,8 @@
 import * as p2 from 'p2-es'
-import { createRagdoll, BODYPARTS, GROUND, OTHER } from './ragdoll.js'
+import { createRagdoll, BODYPARTS, GROUND, OTHER, BUTTON, DISK } from './ragdoll.js'
 import { render } from './renderer.js'
 import { initControls, applyControls } from './controls.js'
 import { getSettings, initSettingsPanel } from './settings.js'
-
-import faceUrl from '../face.png'
-import teloUrl from '../telo.jpg'
-import tazUrl from '../taz.jpg'
-
-const faceImage = new Image()
-faceImage.src = faceUrl
-const torsoImage = new Image()
-torsoImage.src = teloUrl
-const pelvisImage = new Image()
-pelvisImage.src = tazUrl
 
 const FIXED_DT = 1 / 60
 
@@ -28,6 +17,8 @@ const pendingBallBounces = []
 let ballRespawnFor = null
 
 const canvas = document.createElement('canvas')
+canvas.tabIndex = 0
+canvas.setAttribute('aria-label', 'Пляжный волейбол. Игрок 1: WASD и R. Игрок 2: стрелки и Enter.')
 const ctx = canvas.getContext('2d')
 const app = document.querySelector('#app')
 app.appendChild(canvas)
@@ -35,12 +26,10 @@ app.appendChild(canvas)
 function resize() {
   const w = window.innerWidth
   const h = window.innerHeight
-  canvas.width = w
-  canvas.height = h
-  const fieldW = WORLD_RIGHT - WORLD_LEFT
-  const fieldH = WORLD_TOP - WORLD_BOTTOM
-  const scale = Math.min(w / fieldW, h / fieldH)
-  return { width: w, height: h, scale }
+  const pixelRatio = Math.min(window.devicePixelRatio || 1, 2)
+  canvas.width = Math.round(w * pixelRatio)
+  canvas.height = Math.round(h * pixelRatio)
+  return { width: w, height: h, pixelRatio }
 }
 
 let size = resize()
@@ -109,6 +98,34 @@ ceilingShape.collisionGroup = GROUND
 ceilingShape.collisionMask = BODYPARTS | OTHER
 world.addBody(ceiling)
 
+// Trigger buttons on opponent's half: ball hit spawns disk on that side
+const BUTTON_RADIUS = 0.4
+const leftButtonShape = new p2.Circle({ radius: BUTTON_RADIUS })
+leftButtonShape.sensor = true
+leftButtonShape.collisionGroup = BUTTON
+leftButtonShape.collisionMask = OTHER
+const leftButton = new p2.Body({
+  type: p2.Body.STATIC,
+  position: [WORLD_LEFT + 3, WORLD_BOTTOM + 2.5],
+})
+leftButton.addShape(leftButtonShape)
+leftButton.isTriggerButton = true
+leftButton.triggerSide = 'p1'
+world.addBody(leftButton)
+
+const rightButtonShape = new p2.Circle({ radius: BUTTON_RADIUS })
+rightButtonShape.sensor = true
+rightButtonShape.collisionGroup = BUTTON
+rightButtonShape.collisionMask = OTHER
+const rightButton = new p2.Body({
+  type: p2.Body.STATIC,
+  position: [WORLD_RIGHT - 3, WORLD_BOTTOM + 2.5],
+})
+rightButton.addShape(rightButtonShape)
+rightButton.isTriggerButton = true
+rightButton.triggerSide = 'p2'
+world.addBody(rightButton)
+
 // Мяч в стиле TapBall (p2-es restitution demo): упругий, без затухания
 const BALL_RADIUS = 0.25
 const ballMaterial = new p2.Material()
@@ -139,9 +156,21 @@ world.addBody(ball)
 /** Tracks who last had the ball in flight, for alternating respawn. */
 let lastThrowBy = 'p1'
 
+/** Ball hit opponent's button: spawn disk on that side after step. */
+let pendingDiskFor = null
+
+/** Active obstacle disks: { body, spawnTime, side } */
+const activeDisks = []
+
 world.on('beginContact', (ev) => {
   const { bodyA, bodyB, contactEquations } = ev
   if (contactEquations.length === 0) return
+  const ballBody = bodyA.isBall ? bodyA : bodyB
+  const otherBody = bodyA.isBall ? bodyB : bodyA
+  if (ballBody.isBall && otherBody.isTriggerButton) {
+    pendingDiskFor = otherBody.triggerSide
+    return
+  }
   const isBallVsStatic =
     (bodyA.isBall && bodyB.type === p2.Body.STATIC) ||
     (bodyB.isBall && bodyA.type === p2.Body.STATIC)
@@ -149,8 +178,6 @@ world.on('beginContact', (ev) => {
     (bodyA.isBall && bodyB.type === p2.Body.DYNAMIC && !bodyB.isBall) ||
     (bodyB.isBall && bodyA.type === p2.Body.DYNAMIC && !bodyA.isBall)
   if (!isBallVsStatic && !isBallVsPlayer) return
-  const ballBody = bodyA.isBall ? bodyA : bodyB
-  const otherBody = bodyA.isBall ? bodyB : bodyA
   const eq = contactEquations[0]
   const normalA = eq.normalA
   // Normal pointing away from ball (into the other body)
@@ -295,7 +322,7 @@ window.addEventListener('keydown', (e) => {
     }
     ballHeldBy = null
     lastThrowBy = 'p1'
-    ballShape.collisionMask = GROUND | BODYPARTS
+    ballShape.collisionMask = GROUND | BODYPARTS | BUTTON | DISK
     const [vx, vy] = getThrowVelocity(ragdoll1, true)
     ball.velocity[0] = vx
     ball.velocity[1] = vy
@@ -307,7 +334,7 @@ window.addEventListener('keydown', (e) => {
     }
     ballHeldBy = null
     lastThrowBy = 'p2'
-    ballShape.collisionMask = GROUND | BODYPARTS
+    ballShape.collisionMask = GROUND | BODYPARTS | BUTTON | DISK
     const [vx, vy] = getThrowVelocity(ragdoll2, false)
     ball.velocity[0] = vx
     ball.velocity[1] = vy
@@ -392,6 +419,33 @@ function isRagdollAboveNet(ragdoll, netTopY) {
   return typeof y === 'number' && y > netTopY
 }
 
+const DISK_SPEED = 0.3
+const DISK_LIFETIME_SEC = 60
+const DISK_ANGULAR_SPEED = 3
+
+function createObstacleDisk(side) {
+  const s = getSettings()
+  const radius = s.diskSize ?? 0.5
+  const shape = new p2.Circle({ radius })
+  shape.collisionGroup = DISK
+  shape.collisionMask = BODYPARTS | OTHER
+  const body = new p2.Body({
+    type: p2.Body.KINEMATIC,
+    position: side === 'p1'
+      ? [WORLD_LEFT + 4, WORLD_BOTTOM + 4]
+      : [WORLD_RIGHT - 4, WORLD_BOTTOM + 4],
+    velocity: side === 'p1' ? [-DISK_SPEED, 0] : [DISK_SPEED, 0],
+    angularVelocity: DISK_ANGULAR_SPEED,
+  })
+  body.addShape(shape)
+  body.isDisk = true
+  body.diskSide = side
+  body.spawnTime = performance.now() / 1000
+  world.addBody(body)
+  activeDisks.push({ body, spawnTime: body.spawnTime, side })
+  return body
+}
+
 /** Применяет выталкивающую силу над сеткой, если рагдолл зашёл на половину соперника дальше глубины корпуса. */
 function applyNetRepulsionForce(ragdoll, side) {
   const netTopY = WORLD_BOTTOM + (getSettings().netHeight ?? 6)
@@ -453,6 +507,10 @@ function gameLoop(now) {
     applyNetRepulsionForce(ragdoll1, 'left')
     applyNetRepulsionForce(ragdoll2, 'right')
     world.step(FIXED_DT)
+    if (pendingDiskFor !== null) {
+      createObstacleDisk(pendingDiskFor)
+      pendingDiskFor = null
+    }
     if (ballRespawnFor !== null) {
       ballHeldBy = ballRespawnFor
       ballRespawnFor = null
@@ -461,6 +519,25 @@ function gameLoop(now) {
       else attachBallToHand(ragdoll2, false)
     }
     accumulator -= FIXED_DT
+  }
+
+  const margin = 1
+  for (let i = activeDisks.length - 1; i >= 0; i--) {
+    const { body } = activeDisks[i]
+    const nowSec = performance.now() / 1000
+    if (nowSec - body.spawnTime >= DISK_LIFETIME_SEC) {
+      world.removeBody(body)
+      activeDisks.splice(i, 1)
+      continue
+    }
+    const x = body.position[0]
+    if (body.diskSide === 'p1') {
+      if (x <= WORLD_LEFT + margin) body.velocity[0] = DISK_SPEED
+      else if (x >= -margin) body.velocity[0] = -DISK_SPEED
+    } else {
+      if (x >= WORLD_RIGHT - margin) body.velocity[0] = -DISK_SPEED
+      else if (x <= margin) body.velocity[0] = DISK_SPEED
+    }
   }
 
   const alpha = Math.min(1, accumulator / FIXED_DT)
@@ -493,26 +570,8 @@ function gameLoop(now) {
     centerWall.position[1] = WORLD_BOTTOM + currentNetHeight / 2
   }
 
-  render(ctx, world, size, size.scale, {
-    ragdolls: [
-      {
-        head: ragdoll1.head,
-        upperBody: ragdoll1.upperBody,
-        pelvis: ragdoll1.pelvis,
-        lowerLeftArm: ragdoll1.lowerLeftArm,
-        lowerRightArm: ragdoll1.lowerRightArm,
-      },
-      {
-        head: ragdoll2.head,
-        upperBody: ragdoll2.upperBody,
-        pelvis: ragdoll2.pelvis,
-        lowerLeftArm: ragdoll2.lowerLeftArm,
-        lowerRightArm: ragdoll2.lowerRightArm,
-      },
-    ],
-    faceImage,
-    torsoImage,
-    pelvisImage,
+  render(ctx, world, size, {
+    ragdolls: [ragdoll1, ragdoll2],
     worldBottom: WORLD_BOTTOM,
     worldTop: WORLD_TOP,
     worldLeft: WORLD_LEFT,
