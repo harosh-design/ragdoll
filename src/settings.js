@@ -5,11 +5,13 @@ const PRESETS_KEY = 'ragdoll-volley-presets'
 
 /**
  * Defaults are the original game's own values (see original.js). Anything moved
- * off a default is a deliberate departure from the Flash game.
+ * off a default is a deliberate departure from the Flash game — as is
+ * playerScale, whose 1 is the original's doll; this project plays them bigger.
  */
 const defaults = {
   gravityY: GRAVITY_Y,
   timeStep: TIME_STEP,
+  playerScale: 1.15,
   turnImpulse: MOVE.turnImpulse,
   jumpImpulse: MOVE.jumpImpulse,
   jumpBodyImpulse: MOVE.jumpBodyImpulse,
@@ -149,19 +151,25 @@ function slider(id, label, min, max, step, getValue, setValue, onChange) {
 
 loadFromStorage()
 
-export function initSettingsPanel(onChange) {
+/**
+ * Builds the panel and its gear toggle. Returns open/close controls; Escape is
+ * handled by the menus, which also decide whether it should pause the game.
+ */
+export function initSettingsPanel(onChange, onRestart = () => location.reload()) {
   const panel = document.createElement('aside')
   panel.className = 'settings-panel closed'
+  panel.tabIndex = -1
   panel.setAttribute('aria-hidden', 'true')
   panel.innerHTML =
     '<h3>Настройки</h3>' +
     '<p class="controls-hint">Игрок 1 (слева): ← → — движение, ↑ — прыжок, ↓ — вниз, пробел — подача.<br>' +
-    'Игрок 2 (справа): A/D — движение, W — прыжок, S — вниз, R — подача.<br>' +
+    'В режиме «Только люди» игрок 2 (справа): A/D — движение, W — прыжок, S — вниз, R — подача. В режиме «Против бота» им управляет компьютер.<br>' +
     'Значения по умолчанию взяты из оригинальной флеш-игры.</p>'
 
   const rows = [
     ['gravityY', 'Гравитация (перезапуск)', 2, 25, 0.5, 'gravityY'],
     ['timeStep', 'Шаг физики (перезапуск)', 0.01, 0.06, 0.001, 'timeStep'],
+    ['playerScale', 'Размер игроков (перезапуск)', 0.8, 1.5, 0.05, 'playerScale'],
     ['turnImpulse', 'Импульс движения', 0, 12, 0.5, 'turnImpulse'],
     ['jumpImpulse', 'Импульс прыжка', 0, 12, 0.5, 'jumpImpulse'],
     ['jumpBodyImpulse', 'Импульс прыжка (корпус)', 0, 30, 0.5, 'jumpBodyImpulse'],
@@ -237,7 +245,10 @@ export function initSettingsPanel(onChange) {
   presetRow.appendChild(button('Вернуть пресет Ballz', () => loadPreset('Ballz')))
   panel.appendChild(presetRow)
 
-  panel.appendChild(button('Restart game', () => location.reload()))
+  panel.appendChild(button('Restart game', () => {
+    setPanelOpen(false)
+    onRestart()
+  }))
 
   const app = document.querySelector('#app')
   app.appendChild(panel)
@@ -256,7 +267,12 @@ export function initSettingsPanel(onChange) {
   toggleBtn.addEventListener('click', () => setPanelOpen(panel.classList.contains('closed')))
   app.appendChild(toggleBtn)
 
-  window.addEventListener('keydown', (e) => {
-    if (e.code === 'Escape') setPanelOpen(false)
-  })
+  return {
+    isOpen: () => !panel.classList.contains('closed'),
+    open() {
+      setPanelOpen(true)
+      panel.focus({ preventScroll: true })
+    },
+    close: () => setPanelOpen(false),
+  }
 }

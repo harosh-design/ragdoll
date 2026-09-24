@@ -3,13 +3,13 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Ragdoll Volley — Пляж</title>
+    <title>Ragdoll Volley — Neon Beach</title>
     <style>
       * { margin: 0; padding: 0; box-sizing: border-box; }
-      body { overflow: hidden; background: #f6c88c; color: #294c60; font-family: system-ui, sans-serif; }
+      body { overflow: hidden; background: #0c0922; color: #e7deff; font-family: system-ui, sans-serif; }
       #app { position: relative; width: 100vw; height: 100vh; height: 100dvh; overflow: hidden; }
-      canvas { display: block; width: 100%; height: 100%; background: #79b7d9; outline: none; }
-      canvas:focus-visible { outline: 2px solid rgba(255, 246, 214, 0.7); outline-offset: -2px; }
+      canvas { display: block; width: 100%; height: 100%; background: #161044; outline: none; }
+      canvas:focus-visible { outline: 2px solid rgba(121, 237, 255, 0.8); outline-offset: -2px; }
       .settings-toggle {
         position: fixed;
         top: max(16px, env(safe-area-inset-top));
@@ -17,21 +17,21 @@
         z-index: 11;
         width: 44px;
         height: 44px;
-        border: 1px solid rgba(255, 255, 255, 0.78);
+        border: 1px solid rgba(143, 120, 211, 0.4);
         border-radius: 15px;
-        background: rgba(255, 247, 224, 0.8);
-        color: #385b70;
+        background: rgba(18, 13, 49, 0.85);
+        color: #92edff;
         font-size: 1.4rem;
         cursor: pointer;
         display: flex;
         align-items: center;
         justify-content: center;
-        box-shadow: 0 4px 16px rgba(84, 72, 57, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.6);
+        box-shadow: 0 4px 16px rgba(5, 2, 22, 0.25), inset 0 1px 0 rgba(145, 128, 220, 0.15);
         backdrop-filter: blur(12px);
         -webkit-backdrop-filter: blur(12px);
         transition: background 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
       }
-      .settings-toggle:hover { background: #fff8e7; transform: translateY(-1px); box-shadow: 0 6px 20px rgba(84, 72, 57, 0.18); }
+      .settings-toggle:hover { background: #30205c; transform: translateY(-1px); box-shadow: 0 6px 20px rgba(44, 15, 85, 0.4); }
       .settings-toggle:active { transform: translateY(1px); }
       .settings-panel {
         position: fixed;
@@ -42,29 +42,32 @@
         max-height: calc(100dvh - max(8px, env(safe-area-inset-top)) - max(8px, env(safe-area-inset-bottom)));
         overflow-y: auto;
         overscroll-behavior: contain;
-        background: rgba(255, 248, 230, 0.97);
-        color: #294c60;
+        background: rgba(20, 14, 46, 0.97);
+        color: #e7deff;
         padding: 20px;
         display: flex;
         flex-direction: column;
         gap: 16px;
-        border: 1px solid rgba(255, 255, 255, 0.86);
+        border: 1px solid rgba(137, 112, 191, 0.4);
         border-radius: 22px;
         z-index: 10;
-        transition: transform 0.2s ease-out, visibility 0.2s;
-        box-shadow: 0 12px 48px rgba(58, 70, 74, 0.22), inset 0 1px 0 #fff;
+        /* Visible (and focusable) at once on open; hidden only after sliding out. */
+        transition: transform 0.2s ease-out, visibility 0s;
+        box-shadow: 0 12px 48px rgba(6, 2, 24, 0.5), inset 0 1px 0 #4b326f;
         backdrop-filter: blur(18px);
         -webkit-backdrop-filter: blur(18px);
         scrollbar-width: thin;
-        scrollbar-color: #d9b88a transparent;
+        scrollbar-color: #66528b transparent;
       }
+      .settings-panel:focus { outline: none; }
       .settings-panel.closed {
         transform: translateX(calc(100% + 24px));
         visibility: hidden;
         pointer-events: none;
+        transition: transform 0.2s ease-out, visibility 0s 0.2s;
       }
       .settings-panel h3 { min-height: 30px; padding-right: 42px; font-size: 1.1rem; font-weight: 750; letter-spacing: -0.02em; }
-      .controls-hint { padding: 12px; border: 1px solid #e8d5b9; border-radius: 12px; background: #f5ead6; color: #526473; font-size: 0.77rem; line-height: 1.65; }
+      .controls-hint { padding: 12px; border: 1px solid #4c346c; border-radius: 12px; background: #241938; color: #b6a8d0; font-size: 0.77rem; line-height: 1.65; }
       .setting-row {
         display: flex;
         flex-wrap: wrap;
@@ -72,15 +75,15 @@
         gap: 8px;
       }
       .setting-row label { flex: 0 0 100%; font-size: 0.8rem; font-weight: 600; line-height: 1.4; }
-      .setting-value { min-width: 3rem; padding: 4px 6px; border-radius: 7px; background: #efe1c9; color: #355971; font-size: 0.8rem; font-variant-numeric: tabular-nums; text-align: center; }
-      .setting-row input[type="range"] { flex: 1; min-width: 0; height: 24px; accent-color: #358aa0; cursor: pointer; }
+      .setting-value { min-width: 3rem; padding: 4px 6px; border-radius: 7px; background: #392750; color: #a9efff; font-size: 0.8rem; font-variant-numeric: tabular-nums; text-align: center; }
+      .setting-row input[type="range"] { flex: 1; min-width: 0; height: 24px; accent-color: #ed51bf; cursor: pointer; }
       .settings-save {
         flex-shrink: 0;
         min-height: 40px;
         padding: 10px 12px;
-        background: #347d91;
+        background: #613c94;
         color: #fff;
-        border: 1px solid #2f7083;
+        border: 1px solid #8157b1;
         border-radius: 11px;
         cursor: pointer;
         font: inherit;
@@ -91,9 +94,9 @@
         transition: background 0.15s ease, transform 0.15s ease;
       }
       .setting-row .settings-save { flex: 1 1 105px; }
-      .settings-save:hover { background: #286b80; }
+      .settings-save:hover { background: #784bae; }
       .settings-save:active { transform: translateY(1px); }
-      .settings-toggle:focus-visible, .settings-save:focus-visible, .setting-row input:focus-visible { outline: 3px solid #de843c; outline-offset: 3px; }
+      .settings-toggle:focus-visible, .settings-save:focus-visible, .setting-row input:focus-visible { outline: 3px solid #61def5; outline-offset: 3px; }
       @media (max-height: 480px) {
         .settings-panel { padding: 16px; gap: 12px; }
         .controls-hint { padding: 10px; }

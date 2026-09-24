@@ -7,10 +7,18 @@ import {
 const m = (px) => px / PHYS_SCALE
 const rad = (deg) => (deg * Math.PI) / 180
 
+/** How far below the spawn point the soles are: the lowest edge of any part. */
+const SOLE_DY = Math.max(...PARTS.map((p) => p.dy + (p.hy ?? p.r)))
+const PART_DY = Object.fromEntries(PARTS.map((p) => [p.name, p.dy]))
+
 /**
  * A player, built exactly like the original's `player` class: thirteen parts,
  * twelve limited revolute joints, and the two prismatic rails that hold the doll
  * up by its head. See original.js for where each number comes from.
+ *
+ * `scale` resizes the doll, which the original does not. It grows about its
+ * soles, so it still stands on the sand, and each part keeps the original's
+ * mass, so the original's impulses move it and lift it just as far.
  */
 export class Player {
   /**
@@ -19,10 +27,12 @@ export class Player {
    * @param {number} x - spawn x in stage pixels
    * @param {number} y - spawn y in stage pixels
    * @param {1|2} id
+   * @param {number} [scale=1] - doll size; 1 is the original's
    */
-  constructor(world, groundBody, x, y, id) {
+  constructor(world, groundBody, x, y, id, scale = 1) {
     this.world = world
     this.id = id
+    this.scale = scale
     this.parts = {}
     /** Mirrors the original's `contact` field: 0 free, 2 just served, 3 touched. */
     this.contact = 0
@@ -34,13 +44,15 @@ export class Player {
     for (const part of PARTS) {
       const body = world.createBody({
         type: 'dynamic',
-        position: pl.Vec2(m(x + part.dx), m(y + part.dy)),
+        position: this.at(x, y, part.dx, part.dy),
         angularDamping: 0,
       })
-      const shape = part.r != null ? pl.Circle(m(part.r)) : pl.Box(m(part.hx), m(part.hy))
+      const shape = part.r != null
+        ? pl.Circle(m(part.r * scale))
+        : pl.Box(m(part.hx * scale), m(part.hy * scale))
       body.createFixture({
         shape,
-        density: part.density,
+        density: part.density / (scale * scale),
         friction,
         restitution: part.restitution,
       })
@@ -55,7 +67,7 @@ export class Player {
           { enableLimit: true, lowerAngle: rad(j.lower), upperAngle: rad(j.upper) },
           this.parts[j.a],
           this.parts[j.b],
-          pl.Vec2(m(x + j.dx), m(y + j.dy))
+          this.at(x, y, j.dx, j.dy)
         )
       )
     }
@@ -114,9 +126,22 @@ export class Player {
     )
   }
 
+  /** A spawn-relative point in stage pixels, as metres, with the doll scaled about its soles. */
+  at(x, y, dx, dy) {
+    return pl.Vec2(m(x + dx * this.scale), m(y + SOLE_DY + (dy - SOLE_DY) * this.scale))
+  }
+
+  /**
+   * One of the original's height thresholds (px), raised as far as a bigger doll
+   * raises the part it is tested against, so the margin stays the original's.
+   */
+  raised(threshold, part) {
+    return threshold - (SOLE_DY - PART_DY[part]) * (this.scale - 1)
+  }
+
   /** player::jump — one kick straight up plus a shove along the head/torso line. */
   jump() {
-    if (!(this.Ass.getWorldCenter().y > m(MOVE.jumpGroundY))) return
+    if (!(this.Ass.getWorldCenter().y > m(this.raised(MOVE.jumpGroundY, 'Ass')))) return
     const head = this.Head.getWorldCenter()
     const dir = pl.Vec2(head.x - this.Tors.getWorldCenter().x, head.y - this.Tors.getWorldCenter().y)
     dir.normalize()
@@ -136,7 +161,7 @@ export class Player {
    */
   turn(impulse) {
     this.Ass.setLinearVelocity(pl.Vec2(0, 0))
-    if (this.Head.getWorldCenter().y * PHYS_SCALE > MOVE.turnHeadSwitchY) {
+    if (this.Head.getWorldCenter().y * PHYS_SCALE > this.raised(MOVE.turnHeadSwitchY, 'Head')) {
       this.Ass.applyLinearImpulse(impulse, this.Ass.getWorldCenter(), true)
     } else {
       this.Head.applyLinearImpulse(impulse, this.Head.getWorldCenter(), true)
@@ -147,7 +172,7 @@ export class Player {
   turnComp(impulse) {
     this.Ass.setLinearVelocity(pl.Vec2(0, 0))
     this.Head.setLinearVelocity(pl.Vec2(0, 0))
-    if (this.Head.getWorldCenter().y * PHYS_SCALE > MOVE.turnHeadSwitchY) {
+    if (this.Head.getWorldCenter().y * PHYS_SCALE > this.raised(MOVE.turnHeadSwitchY, 'Head')) {
       const half = pl.Vec2(impulse.x * 0.5, impulse.y * 0.5)
       this.Head.applyLinearImpulse(half, this.Head.getWorldCenter(), true)
       this.Ass.applyLinearImpulse(half, this.Ass.getWorldCenter(), true)
@@ -158,7 +183,7 @@ export class Player {
 
   /** player::turnUp */
   turnUp() {
-    if (this.Head.getWorldCenter().y * PHYS_SCALE > MOVE.upHeadY) {
+    if (this.Head.getWorldCenter().y * PHYS_SCALE > this.raised(MOVE.upHeadY, 'Head')) {
       this.Head.applyLinearImpulse(pl.Vec2(0, -MOVE.upImpulse), this.Head.getWorldCenter(), true)
     }
   }
@@ -189,7 +214,7 @@ export class Player {
   standPlayer(x, y) {
     this.setLinVelZero()
     const put = (name, dx, dy) => {
-      this.parts[name].setTransform(pl.Vec2(m(x + dx), m(y + dy)), 0)
+      this.parts[name].setTransform(this.at(x, y, dx, dy), 0)
       this.parts[name].setAngularVelocity(0)
     }
     put('Head', 0, 2)

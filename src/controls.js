@@ -33,11 +33,13 @@ const CODE_TO_KEY = {
 const PREVENT_DEFAULT = new Set(['ArrowLeft', 'ArrowUp', 'ArrowRight', 'ArrowDown', 'Space'])
 
 const keyStack = {}
+/** Off while a menu is up, so arrows and space reach its buttons instead. */
+let active = true
 
 export function initControls() {
   window.addEventListener('keydown', (e) => {
     const code = CODE_TO_KEY[e.code]
-    if (code == null) return
+    if (code == null || !active) return
     if (PREVENT_DEFAULT.has(e.code)) e.preventDefault()
     keyStack[code] = true
   })
@@ -53,6 +55,11 @@ export function initControls() {
 
 export function disableControls() {
   for (const k of Object.keys(keyStack)) keyStack[k] = false
+}
+
+export function setControlsActive(on) {
+  active = on
+  if (!on) disableControls()
 }
 
 /**

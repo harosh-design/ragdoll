@@ -77,3 +77,9 @@ by its lower end so the sole still lands on the sand.
   even though the behaviour matches.
 - The beach artwork, the ambient crabs and fish, and the target/disk hazards
   belong to this project, not to the 2009 game.
+- The dolls default to 1.15× the original's size (`playerScale`). Each part's
+  shape, offsets and joint anchors scale about the soles, while its density
+  drops by the square of the scale so that its mass stays the original's. The
+  original's height thresholds for jumping and air steering rise with the part
+  they test, so a taller doll still counts as standing. At 1 every number is
+  the original's again.

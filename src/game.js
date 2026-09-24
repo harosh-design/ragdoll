@@ -1,10 +1,11 @@
 import * as pl from 'planck'
 import {
   PHYS_SCALE, TIME_STEP, TIME_STEP_GOAL, FRAME_RATE, ITERATIONS,
-  SPAWN, FLOOR_Y, NET_X, GRAVITY_Y,
+  SPAWN, FLOOR_Y, NET_X, GRAVITY_Y, LEFT_WALL_X, RIGHT_WALL_X,
 } from './original.js'
 import { createWorld, createCourt, Ball, attachContactRules, BODY_HAZARD } from './world.js'
 import { Player } from './player.js'
+import { Bot } from './bot.js'
 
 const m = (px) => px / PHYS_SCALE
 
@@ -17,14 +18,22 @@ const CONTACT_DEBOUNCE_MS = 200
 /** game ctor: 2 s of goal replay, then the next round. */
 const GOAL_DELAY_MS = 2000
 /** game ctor: Timer(1000, 6) — six seconds to get the serve away. */
-const SERVE_CLOCK_MS = 6000
+export const SERVE_CLOCK_MS = 6000
 /** game::update decides the point on which side of 10.6 m the ball landed. */
 const COURT_CENTER_M = 10.6
 
 /** The friction value that identifies each player's parts, as in game::update. */
 const FRICTION_OF = { 0.5: 1, 0.51: 2 }
 
+// The triggers and disks keep the layout of this project's first version, which
+// measured them from the side walls: the trigger 3 m in and 2.5 m up, the disk
+// released 4 m in and 4 m up, patrolling to within 1 m of the wall and the net.
 const TARGET_RADIUS = 12
+const TARGET_WALL_GAP = 90
+const TARGET_HEIGHT = 75
+const DISK_WALL_GAP = 120
+const DISK_HEIGHT = 120
+const DISK_TURN_GAP = 30
 const DISK_SPEED = m(9)
 const DISK_LIFETIME_MS = 60000
 
@@ -39,14 +48,24 @@ export class Game {
     this.ballTouchImpulse = options.ballTouchImpulse ?? 1
     this.diskSize = options.diskSize ?? 15
     this.hazardsEnabled = options.hazards !== false
+    /** First to this many points takes the match; 0 plays on forever, like the original. */
+    this.pointsToWin = options.pointsToWin ?? 0
+    /** Doll size against the original's 1; see Player. */
+    this.playerScale = options.playerScale ?? 1
+    this.mode = options.mode === 'bot' ? 'bot' : 'humans'
+    this.bot = this.mode === 'bot' ? new Bot(2) : null
 
     this.world = createWorld(this.gravityY)
     this.court = createCourt(this.world)
     this.ball = new Ball(this.world)
-    this.player1 = new Player(this.world, this.court.groundBody, SPAWN.p1.x, SPAWN.p1.y, 1)
-    this.player2 = new Player(this.world, this.court.groundBody, SPAWN.p2.x, SPAWN.p2.y, 2)
+    this.player1 = new Player(this.world, this.court.groundBody, SPAWN.p1.x, SPAWN.p1.y, 1, this.playerScale)
+    this.player2 = new Player(this.world, this.court.groundBody, SPAWN.p2.x, SPAWN.p2.y, 2, this.playerScale)
 
     this.score = { p1: 0, p2: 0 }
+    /** Who won the last point and why: 'ground', 'touches' or 'serve'. */
+    this.lastPoint = null
+    /** 1 or 2 once the match is won; the world then keeps running in slow motion. */
+    this.winner = 0
     /** The original's win1: true when player 1 took the last point, so serves. */
     this.win1 = true
     this.onBallDown = false
@@ -73,11 +92,22 @@ export class Game {
     this.ball.ballOfPlayer = 1
   }
 
+  /**
+   * Step the world alone, so the dolls fall out of their spawn T-pose before
+   * anyone sees them. The rules and the serve clock do not run.
+   */
+  settle(frames) {
+    for (let i = 0; i < frames; i++) this.world.step(this.timeStep, ITERATIONS, ITERATIONS)
+  }
+
   /** One stage frame: step, then input, then the rules, then the ball clamps. */
   frame(applyInput) {
     this.world.step(this.timeStep, ITERATIONS, ITERATIONS)
     while (this.pendingDisks.length) this.spawnDisk(this.pendingDisks.shift())
-    if (!this.disableUpdate) applyInput?.(this)
+    if (!this.disableUpdate) {
+      applyInput?.(this)
+      this.bot?.update(this)
+    }
     this.updateRules(FRAME_MS)
     this.updateDisks(FRAME_MS)
     this.ball.update()
@@ -95,13 +125,22 @@ export class Game {
     return 0
   }
 
-  scorePoint(winner) {
+  scorePoint(winner, reason) {
     if (winner === 1) { this.score.p1 += 1; this.win1 = true } else { this.score.p2 += 1; this.win1 = false }
+    this.lastPoint = { winner, reason }
     this.player1.contact = 0
     this.player2.contact = 0
     this.disableUpdate = true
     this.timeStep = TIME_STEP_GOAL
     this.goalTimer = GOAL_DELAY_MS
+  }
+
+  /** 1 or 2 once someone has reached pointsToWin, otherwise 0. */
+  matchWinner() {
+    if (!this.pointsToWin) return 0
+    if (this.score.p1 >= this.pointsToWin) return 1
+    if (this.score.p2 >= this.pointsToWin) return 2
+    return 0
   }
 
   newRound() {
@@ -137,8 +176,13 @@ export class Game {
     if (this.contactTimer2 === 0) this.bContact2 = false
 
     if (this.disableUpdate) {
+      if (this.winner) return
       this.goalTimer -= dtMs
-      if (this.goalTimer <= 0) this.newRound()
+      if (this.goalTimer <= 0) {
+        // The replay of a match-winning point runs out into the result instead of a new serve.
+        this.winner = this.matchWinner()
+        if (!this.winner) this.newRound()
+      }
       return
     }
 
@@ -166,18 +210,18 @@ export class Game {
         if (edge) this.world.destroyJoint(edge.joint)
         const server = this.ball.ballOfPlayer
         this.ball.ballOfPlayer = 0
-        this.scorePoint(server === 1 ? 2 : 1)
+        this.scorePoint(server === 1 ? 2 : 1, 'serve')
         return
       }
     }
 
-    if (this.player1.contact > 3) { this.scorePoint(2); return }
-    if (this.player2.contact > 3) { this.scorePoint(1); return }
+    if (this.player1.contact > 3) { this.scorePoint(2, 'touches'); return }
+    if (this.player2.contact > 3) { this.scorePoint(1, 'touches'); return }
 
     if (this.onBallDown) {
       this.onBallDown = false
       if (!this.ball.body.getJointList()) {
-        this.scorePoint(this.ball.body.getWorldCenter().x < COURT_CENTER_M ? 2 : 1)
+        this.scorePoint(this.ball.body.getWorldCenter().x < COURT_CENTER_M ? 2 : 1, 'ground')
       }
     }
   }
@@ -193,9 +237,10 @@ export class Game {
   }
 
   // --- hazards kept from this project; not part of the original game ---
+  /** A trigger by each side wall; the ball through it releases a disk on that half. */
   createTargets() {
-    for (const [side, x] of [['p1', 120], ['p2', 520]]) {
-      const body = this.world.createBody({ position: pl.Vec2(m(x), m(FLOOR_Y - 75)) })
+    for (const [side, x] of [['p1', LEFT_WALL_X + TARGET_WALL_GAP], ['p2', RIGHT_WALL_X - TARGET_WALL_GAP]]) {
+      const body = this.world.createBody({ position: pl.Vec2(m(x), m(FLOOR_Y - TARGET_HEIGHT)) })
       body.createFixture({ shape: pl.Circle(m(TARGET_RADIUS)), isSensor: true, density: 0 })
       body.setUserData({ bodyType: 0, target: true, side })
       this.targets.push({ body, side })
@@ -212,7 +257,7 @@ export class Game {
   spawnDisk(side) {
     const body = this.world.createBody({
       type: 'kinematic',
-      position: pl.Vec2(m(side === 'p1' ? 160 : 480), m(FLOOR_Y - 130)),
+      position: pl.Vec2(m(side === 'p1' ? LEFT_WALL_X + DISK_WALL_GAP : RIGHT_WALL_X - DISK_WALL_GAP), m(FLOOR_Y - DISK_HEIGHT)),
       linearVelocity: pl.Vec2(side === 'p1' ? -DISK_SPEED : DISK_SPEED, 0),
       angularVelocity: 3,
     })
@@ -232,11 +277,11 @@ export class Game {
       }
       const x = disk.body.getPosition().x * PHYS_SCALE
       if (disk.side === 'p1') {
-        if (x <= 30) disk.body.setLinearVelocity(pl.Vec2(DISK_SPEED, 0))
-        else if (x >= NET_X - 30) disk.body.setLinearVelocity(pl.Vec2(-DISK_SPEED, 0))
+        if (x <= LEFT_WALL_X + DISK_TURN_GAP) disk.body.setLinearVelocity(pl.Vec2(DISK_SPEED, 0))
+        else if (x >= NET_X - DISK_TURN_GAP) disk.body.setLinearVelocity(pl.Vec2(-DISK_SPEED, 0))
       } else {
-        if (x >= 610) disk.body.setLinearVelocity(pl.Vec2(-DISK_SPEED, 0))
-        else if (x <= NET_X + 30) disk.body.setLinearVelocity(pl.Vec2(DISK_SPEED, 0))
+        if (x >= RIGHT_WALL_X - DISK_TURN_GAP) disk.body.setLinearVelocity(pl.Vec2(-DISK_SPEED, 0))
+        else if (x <= NET_X + DISK_TURN_GAP) disk.body.setLinearVelocity(pl.Vec2(DISK_SPEED, 0))
       }
     }
   }
