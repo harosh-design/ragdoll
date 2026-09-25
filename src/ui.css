@@ -633,3 +633,5 @@
     20%, 80% { opacity: 1; }
   }
 }
+
+.settings-panel select { width: 100%; color: #f1eaff; background: #251a3c; border: 1px solid #755893; border-radius: 8px; padding: 10px; font: inherit; }

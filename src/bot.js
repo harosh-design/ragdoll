@@ -59,6 +59,11 @@ export class Bot {
     const hi = this.id === 2 ? m(RIGHT_WALL_X) - 1.4 : NET - 1.9
     this.jumpCooldown = Math.max(0, this.jumpCooldown - FRAME_DT)
 
+    if (game.spike.caught(player).length && !this.jumpCooldown) {
+      player.jump()
+      this.jumpCooldown = 0.35
+    }
+
     if (game.ball.ballOfPlayer) {
       // Every new serve resets the reaction state, including consecutive points.
       if (game.serveClock > this.lastServeClock) {

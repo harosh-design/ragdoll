@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import * as pl from 'planck'
 import { Game, SERVE_CLOCK_MS, FRAME_DT } from '../src/game.js'
-import { FLOOR_Y, LEFT_WALL_X, RIGHT_WALL_X, NET_X } from '../src/original.js'
+import { FLOOR_Y } from '../src/original.js'
 
 const SERVE_FRAMES = Math.ceil(SERVE_CLOCK_MS / 1000 / FRAME_DT) + 1
 const run = (game, frames) => { for (let i = 0; i < frames; i++) game.frame() }
@@ -78,27 +78,6 @@ test('a bigger doll stands taller on the sand, with the original mass and jump',
   assert.ok(bigger.rise > original.rise * 0.8, `still jumps: ${bigger.rise} vs ${original.rise} px`)
 })
 
-test('a ball through a wall trigger releases a disk that patrols that whole half', () => {
-  for (const [side, wall, direction] of [['p1', LEFT_WALL_X, -1], ['p2', RIGHT_WALL_X, 1]]) {
-    const game = new Game()
-    game.world.destroyJoint(game.ball.body.getJointList().joint)
-    game.ball.ballOfPlayer = 0
-    const target = game.targets.find((t) => t.side === side).body.getPosition()
-    assert.ok(Math.abs(px(target.x) - wall) <= 100, `${side} trigger sits by its wall`)
-    game.ball.body.setTransform(pl.Vec2(target.x, target.y - 3), 0)
-    for (let i = 0; i < 60 && !game.disks.length; i++) game.frame()
-    assert.equal(game.disks.length, 1, `${side} released a disk`)
-    const disk = game.disks[0].body
-    assert.equal(Math.sign(disk.getLinearVelocity().x), direction, 'it heads for the wall first')
-    // Walk it to the wall end of its patrol, then to the net end.
-    disk.setPosition(pl.Vec2((wall - direction * 25) / 30, disk.getPosition().y))
-    game.updateDisks(0)
-    assert.equal(Math.sign(disk.getLinearVelocity().x), -direction, 'turns back 30 px off the wall')
-    disk.setPosition(pl.Vec2((NET_X + direction * 25) / 30, disk.getPosition().y))
-    game.updateDisks(0)
-    assert.equal(Math.sign(disk.getLinearVelocity().x), direction, 'turns back 30 px off the net')
-  }
-})
 
 test('settling moves the dolls without running the serve clock', () => {
   const game = new Game({ hazards: false })

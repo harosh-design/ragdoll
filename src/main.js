@@ -39,7 +39,8 @@ function createGame(pointsToWin = 0, mode = 'humans', characters) {
     timeStep: settings.timeStep,
     playerScale: settings.playerScale,
     ballTouchImpulse: settings.ballTouchImpulse,
-    diskSize: settings.diskSize,
+    servePower: settings.servePower,
+    arena: settings.arena,
     pointsToWin,
     mode,
     characters,
@@ -65,7 +66,8 @@ initControls()
 const settingsPanel = initSettingsPanel(() => {
   applyTuning(getSettings())
   game.ballTouchImpulse = getSettings().ballTouchImpulse
-  game.diskSize = getSettings().diskSize
+  game.servePower = getSettings().servePower
+  game.arena = getSettings().arena
 }, () => startMatch())
 
 const menus = initMenus({
@@ -214,6 +216,10 @@ function gameLoop(now) {
   const alpha = Math.min(1, accumulator / FRAME_DT)
   render(ctx, size, {
     players: [viewPlayer(game.player1, alpha, frameTime, now / 1000), viewPlayer(game.player2, alpha, frameTime, now / 1000)],
+    arena: game.arena,
+    touches: !game.disableUpdate && !held ? [game.player1.contact, game.player2.contact] : [0, 0],
+    impaled: [game.spike.caught(game.player1).length > 0, game.spike.caught(game.player2).length > 0],
+    hazardCooldown: game.hazards?.cooldown ?? 0,
     time: reducedMotion?.matches ? 0 : now / 1000,
     ball: view(game.ball.body, alpha),
     ballRadius: m(BALL.radius),

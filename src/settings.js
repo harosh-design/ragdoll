@@ -19,7 +19,8 @@ const defaults = {
   ballMaxVX: BALL.maxVX,
   ballMaxVY: BALL.maxVY,
   ballTouchImpulse: 1,
-  diskSize: 15,
+  servePower: 1,
+  arena: 'side',
 }
 
 export const ORIGINAL_DEFAULTS = { ...defaults }
@@ -166,6 +167,14 @@ export function initSettingsPanel(onChange, onRestart = () => location.reload())
     'В режиме «Только люди» игрок 2 (справа): A/D — движение, W — прыжок, S — вниз, R — подача. В режиме «Против бота» им управляет компьютер.<br>' +
     'Значения по умолчанию взяты из оригинальной флеш-игры.</p>'
 
+  const arenaRow = document.createElement('div')
+  arenaRow.className = 'setting-row'
+  arenaRow.innerHTML = '<label for="arena">Игровое поле</label><select id="arena"><option value="side">Арена — строго сбоку</option><option value="beach">Неоновый пляж</option></select>'
+  const arenaSelect = arenaRow.querySelector('select')
+  arenaSelect.value = current.arena === 'beach' ? 'beach' : 'side'
+  arenaSelect.addEventListener('change', () => { current.arena = arenaSelect.value; save(); onChange?.() })
+  panel.appendChild(arenaRow)
+
   const rows = [
     ['gravityY', 'Гравитация (перезапуск)', 2, 25, 0.5, 'gravityY'],
     ['timeStep', 'Шаг физики (перезапуск)', 0.01, 0.06, 0.001, 'timeStep'],
@@ -177,7 +186,7 @@ export function initSettingsPanel(onChange, onRestart = () => location.reload())
     ['ballMaxVX', 'Предел скорости мяча по X', 5, 40, 1, 'ballMaxVX'],
     ['ballMaxVY', 'Предел скорости мяча по Y', 5, 40, 1, 'ballMaxVY'],
     ['ballTouchImpulse', 'Подброс мяча при касании', 0, 4, 0.1, 'ballTouchImpulse'],
-    ['diskSize', 'Размер диска', 5, 40, 1, 'diskSize'],
+    ['servePower', 'Сила подачи (×)', 0.25, 2.5, 0.05, 'servePower'],
   ]
   for (const [id, label, min, max, step, key] of rows) {
     panel.appendChild(

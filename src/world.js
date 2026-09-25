@@ -1,7 +1,7 @@
 import * as pl from 'planck'
 import {
   PHYS_SCALE, GRAVITY_Y, COURT, BALL, SPAWN,
-  BALL_WALL_VX_FACTOR, BALL_HAZARD_VX_FACTOR,
+  BALL_WALL_VX_FACTOR, BALL_HAZARD_VX_FACTOR, FLOOR_Y, NET_X, NET_TOP_Y,
 } from './original.js'
 
 const m = (px) => px / PHYS_SCALE
@@ -42,7 +42,14 @@ export function createCourt(world) {
     rightWall: make(COURT.rightWall),
     ceiling: make(COURT.ceiling),
     ground: make(COURT.ground),
-    net: make(COURT.net),
+    net: (() => {
+      const body = world.createBody({ position: pl.Vec2(m(NET_X), m(FLOOR_Y)) })
+      body.createFixture({ shape: pl.Polygon([
+        pl.Vec2(-m(10), 0), pl.Vec2(0, m(NET_TOP_Y - FLOOR_Y)), pl.Vec2(m(10), 0),
+      ]), friction: 2.5, restitution: 0 })
+      body.setUserData({ bodyType: BODY_WALL, spike: true })
+      return body
+    })(),
   }
 }
 

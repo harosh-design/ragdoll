@@ -18,12 +18,13 @@ const VIEW_RIGHT_PX = 921
 const NET_PX = 320
 const PHYS_SCALE = 30
 
-function layout(size) {
-  const width = Math.min(size.width, size.height * 16 / 9)
-  const height = width * 9 / 16
+export function layout(size, arena = 'side') {
+  const aspect = arena === 'side' ? 640 / 400 : 16 / 9
+  const width = Math.min(size.width, size.height * aspect)
+  const height = width / aspect
   const x = (size.width - width) / 2
   const y = (size.height - height) / 2
-  const floorY = y + height * 0.875
+  const floorY = y + height * (arena === 'side' ? 0.947 : 0.875)
   const spanPx = VIEW_RIGHT_PX - VIEW_LEFT_PX
   const scale = width / (spanPx / PHYS_SCALE)
   const centerX = x + width * ((NET_PX - VIEW_LEFT_PX) / spanPx)
@@ -118,64 +119,58 @@ function drawShadow(ctx, x, floorY, width, height, alpha) {
   ctx.fill()
 }
 
-// The mesh crosses the court in depth, anchored to the physical centre barrier.
-// Its top passes through the collider top at the players' movement plane.
-function drawNet(ctx, v, height, foreground) {
-  const far = { x: v.centerX - v.width * 0.044, y: v.floorY - v.height * COURT_FAR_DEPTH }
-  const near = { x: v.centerX + v.width * 0.033, y: v.floorY + v.height * COURT_NEAR_DEPTH }
-  const netHeight = height * v.scale
-  const meshHeight = netHeight * 0.72
-  const poleWidth = Math.max(3, v.width * 0.0045)
-  const at = (t, drop = 0) => ({
-    x: far.x + (near.x - far.x) * t,
-    y: far.y + (near.y - far.y) * t - netHeight + drop,
-  })
-  const line = (a, b) => {
-    ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke()
-  }
-  const pole = (p) => {
-    ctx.shadowColor = '#18dbff'
-    ctx.shadowBlur = poleWidth * 2.5
-    ctx.strokeStyle = '#64edff'
-    ctx.lineWidth = poleWidth + 2
-    line({ x: p.x, y: p.y + 1 }, { x: p.x, y: p.y - netHeight - poleWidth })
-    ctx.shadowBlur = 0
-    ctx.strokeStyle = '#101633'
-    ctx.lineWidth = poleWidth
-    line(p, { x: p.x, y: p.y - netHeight - poleWidth })
-    ctx.strokeStyle = '#d3ffff'
-    ctx.lineWidth = 1
-    line({ x: p.x - poleWidth / 2, y: p.y }, { x: p.x - poleWidth / 2, y: p.y - netHeight })
-  }
+// The visible silhouette is exactly the physical triangle, in both arenas.
+function drawNet(ctx, v, height) {
+  const top = v.floorY - height * v.scale
+  const half = 10 / PHYS_SCALE * v.scale
   ctx.save()
-  ctx.lineCap = 'round'
-  if (foreground) {
-    pole(near)
-  } else {
-    drawShadow(ctx, v.centerX, v.floorY, v.width * 0.05, v.height * 0.01, 0.3)
-    pole(far)
-    ctx.beginPath()
-    const corners = [at(0), at(1), at(1, meshHeight), at(0, meshHeight)]
-    corners.forEach((p, i) => i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y))
-    ctx.closePath()
-    ctx.fillStyle = 'rgba(8, 9, 34, 0.28)'
-    ctx.fill()
-    ctx.strokeStyle = 'rgba(14, 18, 49, 0.95)'
-    ctx.lineWidth = Math.max(1, v.width * 0.0012)
-    const rows = 16
-    for (let row = 1; row < rows; row++) line(at(0, meshHeight * row / rows), at(1, meshHeight * row / rows))
-    for (let col = 1; col < 9; col++) line(at(col / 9), at(col / 9, meshHeight))
-    ctx.strokeStyle = 'rgba(114, 198, 255, 0.65)'
-    ctx.lineWidth = Math.max(0.5, v.width * 0.00045)
-    for (let col = 1; col < 9; col++) line(at(col / 9), at(col / 9, meshHeight))
-    ctx.shadowColor = '#fa2fe7'
-    ctx.shadowBlur = v.width * 0.008
-    ctx.strokeStyle = '#ffb1f7'
-    ctx.lineWidth = Math.max(2, v.width * 0.0025)
-    line(at(0), at(1))
-    line(at(0, meshHeight), at(1, meshHeight))
-  }
+  ctx.beginPath()
+  ctx.moveTo(v.centerX, top)
+  ctx.lineTo(v.centerX + half, v.floorY)
+  ctx.lineTo(v.centerX - half, v.floorY)
+  ctx.closePath()
+  const fill = ctx.createLinearGradient(v.centerX - half, 0, v.centerX + half, 0)
+  fill.addColorStop(0, '#1a2439')
+  fill.addColorStop(0.45, '#acbccc')
+  fill.addColorStop(0.53, '#52687b')
+  fill.addColorStop(1, '#202737')
+  ctx.fillStyle = fill
+  ctx.fill()
+  ctx.strokeStyle = '#c2d9e5'
+  ctx.lineWidth = Math.max(0.6, v.width / 1600)
+  ctx.stroke()
   ctx.restore()
+}
+
+function drawSideArena(ctx, size, v) {
+  ctx.fillStyle = '#111b29'
+  ctx.fillRect(0, 0, size.width, size.height)
+  const sky = ctx.createLinearGradient(0, v.y, 0, v.floorY)
+  sky.addColorStop(0, '#183449')
+  sky.addColorStop(0.65, '#547987')
+  sky.addColorStop(1, '#9daaa0')
+  ctx.fillStyle = sky
+  ctx.fillRect(v.x, v.y, v.width, v.height)
+  // All landscape bands are horizontal; no receding court lines or net mesh.
+  ctx.fillStyle = '#c3b99a'
+  ctx.fillRect(v.x, v.floorY, v.width, v.y + v.height - v.floorY)
+  ctx.fillStyle = '#ddd2ac'
+  ctx.fillRect(v.x, v.floorY, v.width, Math.max(2, v.height * 0.004))
+  ctx.fillStyle = 'rgba(14,31,43,.35)'
+  const toX = px => v.centerX + (px - NET_PX) / PHYS_SCALE * v.scale
+  ctx.fillRect(v.x, v.y, toX(-215) - v.x, v.floorY - v.y)
+  ctx.fillRect(toX(840), v.y, v.x + v.width - toX(840), v.floorY - v.y)
+  // Flush launch hatches at the original executer spawn positions.
+  for (const x of [105, 525]) {
+    const y = v.floorY - (355 + 120) / PHYS_SCALE * v.scale
+    ctx.fillStyle = 'rgba(22,40,53,.35)'
+    ctx.beginPath()
+    ctx.arc(toX(x), y, 22 / PHYS_SCALE * v.scale, 0, Math.PI * 2)
+    ctx.fill()
+    ctx.strokeStyle = 'rgba(202,220,218,.25)'
+    ctx.lineWidth = 2
+    ctx.stroke()
+  }
 }
 
 function drawBall(ctx, body, v) {
@@ -223,75 +218,68 @@ function drawBall(ctx, body, v) {
   ctx.restore()
 }
 
-function drawTarget(ctx, body, v) {
+function drawTarget(ctx, body, v, cooldown) {
   const p = point(body, v)
-  const r = body.shapes[0].radius * v.scale
+  const w = body.shapes[0].width * v.scale
+  const h = body.shapes[0].height * v.scale
+  const color = cooldown > 0 ? '#e49d54' : '#eff09f'
   ctx.save()
-  ctx.translate(p.x, p.y)
-  ctx.fillStyle = 'rgba(16, 12, 44, 0.72)'
-  ctx.strokeStyle = body.side === 'p1' ? '#ff78c4' : '#64e9ff'
-  ctx.lineWidth = Math.max(1, v.scale * 0.03)
-  ctx.beginPath()
-  ctx.arc(0, 0, r, 0, Math.PI * 2)
-  ctx.fill()
-  ctx.stroke()
-  ctx.strokeStyle = body.side === 'p1' ? '#ff78c4' : '#64e9ff'
-  ctx.lineWidth = Math.max(1.5, r * 0.12)
-  ctx.beginPath()
-  ctx.arc(0, 0, r * 0.58, 0, Math.PI * 2)
-  ctx.stroke()
-  ctx.fillStyle = '#f4c8ff'
-  ctx.beginPath()
-  ctx.arc(0, 0, r * 0.19, 0, Math.PI * 2)
-  ctx.fill()
+  ctx.fillStyle = '#263a47'
+  ctx.fillRect(p.x - w / 2 - 3, p.y - h / 2 - 4, w + 6, h + 8)
+  ctx.fillStyle = color
+  ctx.shadowColor = color
+  ctx.shadowBlur = cooldown > 0 ? 2 : 8
+  ctx.fillRect(p.x - w / 2, p.y - h / 2, Math.max(3, w), h)
   ctx.restore()
 }
 
-function drawDisk(ctx, body, v) {
+function drawDisk(ctx, body, v, time) {
   const p = point(body, v)
   const r = body.shapes[0].radius * v.scale
   ctx.save()
-  ctx.beginPath()
-  ctx.rect(body.side === 'p1' ? v.x : v.centerX, v.y, v.width / 2, v.height)
-  ctx.clip()
   ctx.translate(p.x, p.y)
-  ctx.rotate(-body.angle)
-  const fill = ctx.createRadialGradient(-r * 0.3, -r * 0.4, 0, 0, 0, r)
-  fill.addColorStop(0, '#c4f9ef')
-  fill.addColorStop(0.6, '#64cdd6')
-  fill.addColorStop(1, '#2695b1')
-  ctx.fillStyle = fill
-  ctx.strokeStyle = '#226b89'
-  ctx.lineWidth = Math.max(1.5, r * 0.08)
+  ctx.rotate(-body.angle + time * 10)
+  ctx.fillStyle = body.side === 1 ? '#e9b3bb' : '#afdae4'
+  ctx.strokeStyle = '#273444'
+  ctx.lineWidth = Math.max(1, r * 0.07)
   ctx.beginPath()
-  ctx.arc(0, 0, r, 0, Math.PI * 2)
+  for (let i = 0; i < 16; i++) {
+    const angle = i * Math.PI / 8
+    const radius = i % 2 ? r * 0.48 : r
+    const x = Math.cos(angle) * radius, y = Math.sin(angle) * radius
+    if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y)
+  }
+  ctx.closePath()
   ctx.fill()
   ctx.stroke()
-  ctx.strokeStyle = '#d8ffef'
+  ctx.fillStyle = '#253646'
   ctx.beginPath()
-  ctx.arc(0, 0, r * 0.68, 0, Math.PI * 2)
+  ctx.arc(0, 0, r * 0.23, 0, Math.PI * 2)
+  ctx.fill()
+  ctx.strokeStyle = '#f4edce'
   ctx.stroke()
   ctx.restore()
 }
 
 export function render(ctx, size, opts) {
-  const v = layout(size)
+  const side = opts.arena !== 'beach'
+  const v = layout(size, side ? 'side' : 'beach')
   ctx.setTransform(size.pixelRatio ?? 1, 0, 0, size.pixelRatio ?? 1, 0, 0)
-  drawBackground(ctx, size, v, opts.time ?? 0)
+  if (side) drawSideArena(ctx, size, v)
+  else drawBackground(ctx, size, v, opts.time ?? 0)
   ctx.save()
   ctx.beginPath()
   ctx.rect(v.x, v.y, v.width, v.height)
   ctx.clip()
-  drawScenery(ctx, v, opts.time ?? 0)
-  drawCourt(ctx, v)
-  for (const target of opts.targets) drawTarget(ctx, target, v)
-  for (const disk of opts.disks) drawDisk(ctx, disk, v)
-  drawNet(ctx, v, opts.netHeight, false)
+  if (!side) { drawScenery(ctx, v, opts.time ?? 0); drawCourt(ctx, v) }
+  for (const target of opts.targets) drawTarget(ctx, target, v, opts.hazardCooldown)
+  for (const disk of opts.disks) drawDisk(ctx, disk, v, opts.time ?? 0)
   opts.players.forEach((parts, index) => drawRagdoll(ctx, parts, index, v))
-  drawNet(ctx, v, opts.netHeight, true)
+  drawNet(ctx, v, opts.netHeight)
   drawBall(ctx, opts.ball, v)
   if (opts.serve) drawServeClock(ctx, opts.ball, v, opts.serve)
-  drawForegroundPlants(ctx, v, opts.time ?? 0)
+  if (!side) drawForegroundPlants(ctx, v, opts.time ?? 0)
+  if (opts.hud !== false) drawTouchIndicators(ctx, v, opts)
   ctx.restore()
   if (opts.hud !== false) drawScore(ctx, v, opts.score, opts.pointsToWin, opts.mode)
 }
@@ -360,6 +348,39 @@ function drawScore(ctx, v, score, pointsToWin, mode) {
     ctx.shadowBlur = 6
     ctx.fillStyle = p1 && p2 ? '#f4e9ff' : p1 ? P1_COLOR : p2 ? P2_COLOR : '#b9a9da'
     ctx.fillText(p1 || p2 ? 'MATCH POINT' : `FIRST TO ${pointsToWin}`, 0, 90)
+  }
+  ctx.restore()
+}
+
+function drawTouchIndicators(ctx, v, opts) {
+  const unit = v.width / 1142
+  ctx.save()
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  for (let i = 0; i < 2; i++) {
+    const count = opts.touches?.[i] ?? 0
+    const x = v.x + v.width * (i === 0 ? 0.25 : 0.75)
+    const y = v.y + 48 * unit
+    const color = count >= 3 ? '#ff927b' : count === 2 ? '#ffda75' : i === 0 ? P1_COLOR : P2_COLOR
+    ctx.fillStyle = 'rgba(12,23,35,.78)'
+    ctx.beginPath()
+    ctx.roundRect(x - 113 * unit, y - 20 * unit, 226 * unit, 62 * unit, 10 * unit)
+    ctx.fill()
+    for (let n = 0; n < 3; n++) {
+      ctx.beginPath()
+      ctx.arc(x + (n - 1) * 19 * unit, y, 5 * unit, 0, Math.PI * 2)
+      ctx.fillStyle = n < count ? color : '#526575'
+      ctx.fill()
+      if (count === 2 && n === 2) { ctx.strokeStyle = color; ctx.lineWidth = 2 * unit; ctx.stroke() }
+    }
+    ctx.font = '600 ' + 11 * unit + 'px system-ui, sans-serif'
+    ctx.fillStyle = color
+    const label = count === 2 ? 'ОСТАЛОСЬ 3-Е КАСАНИЕ' : count >= 3 ? 'ЛИМИТ: БОЛЬШЕ НЕ КАСАТЬСЯ' : 'КАСАНИЯ · ' + count + ' / 3'
+    ctx.fillText(label, x, y + 23 * unit)
+    if (opts.impaled?.[i]) {
+      ctx.fillStyle = '#ffda75'
+      ctx.fillText('НА ОСТРИЕ · ПРЫГАЙТЕ ДЛЯ ВЫХОДА', x, y + 62 * unit)
+    }
   }
   ctx.restore()
 }

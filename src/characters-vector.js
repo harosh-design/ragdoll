@@ -1,5 +1,6 @@
 // Small, articulated illustrations drawn in the same local space as the bodies.
 // Keeping the artwork procedural lets every player-size setting stay sharp.
+import { FOREARM_SCALE } from './player.js'
 import { ART, PHYS_SCALE } from './original.js'
 
 const TAU = Math.PI * 2
@@ -99,7 +100,7 @@ function drawArm(ctx, upper, lower, finger, sign, colors, k, view, back, au) {
     joint(ctx, -sign * half, 0, 0.084, colors, back)
   })
 
-  segment(lower, ART.hand, (half) => {
+  segment(lower, { ...ART.hand, w: ART.hand.w * FOREARM_SCALE }, (half) => {
     ctx.scale(sign, 1)
     ctx.beginPath()
     ctx.moveTo(-half, -0.072)

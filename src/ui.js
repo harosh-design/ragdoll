@@ -97,7 +97,7 @@ const TEMPLATE = `
     <div class="title-layout">
       <header class="logo">
         <h1 id="ui-title"><span class="logo-top">Ragdoll</span> <span class="logo-bottom">Volley</span></h1>
-        <p class="logo-tag">Neon Beach</p>
+        <p class="logo-tag">Side Arena · Neon Beach</p>
       </header>
       <div class="card title-menu">
         <div class="mode-choice" role="radiogroup" aria-labelledby="ui-mode" lang="ru">
@@ -124,7 +124,7 @@ const TEMPLATE = `
 
   <section class="screen screen-characters" data-screen="characters" role="dialog" aria-labelledby="ui-characters" lang="ru" hidden>
     <div class="card character-select">
-      <header class="character-select-header"><p class="eyebrow">Neon Beach · Состав матча</p><h2 class="card-title" id="ui-characters">Выберите персонажей</h2><p>Каждому — свой стиль. Все играют на равных.</p></header>
+      <header class="character-select-header"><p class="eyebrow">Ragdoll Volley · Состав матча</p><h2 class="card-title" id="ui-characters">Выберите персонажей</h2><p>Каждому — свой стиль. Все играют на равных.</p></header>
       <div class="character-lineup">${characterPicker(1)}${characterPicker(2)}</div>
       <div class="character-select-footer"><button class="button" type="button" data-action="back">Назад</button><p>Выбор сохраняется автоматически</p><button class="button button-primary" type="button" data-action="start" data-autofocus>Начать матч</button></div>
     </div>

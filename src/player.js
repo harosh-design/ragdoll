@@ -1,10 +1,12 @@
 import * as pl from 'planck'
 import {
-  PHYS_SCALE, PARTS, PART_FRICTION, JOINTS, RAIL, MOVE, SERVE,
+  PHYS_SCALE, PARTS, PART_FRICTION, JOINTS, RAIL, MOVE, SERVE, NET_X,
 } from './original.js'
 
 /** Stage pixels -> physics metres, the way the original divides by m_physScale. */
 const m = (px) => px / PHYS_SCALE
+export const FOREARM_SCALE = 0.85
+const shortX = x => Math.sign(x) * (31 + (Math.abs(x) - 31) * FOREARM_SCALE)
 const rad = (deg) => (deg * Math.PI) / 180
 
 /** How far below the spawn point the soles are: the lowest edge of any part. */
@@ -37,11 +39,16 @@ export class Player {
     /** Mirrors the original's `contact` field: 0 free, 2 just served, 3 touched. */
     this.contact = 0
     this.ballJoint = null
-    this.touchTimer = null
+    this.serveContactMs = 0
+    this.servePower = 1
 
     const friction = PART_FRICTION[id]
 
-    for (const part of PARTS) {
+    for (const original of PARTS) {
+      const forearm = original.name.startsWith('Hand')
+      const part = { ...original }
+      if (forearm || part.name.startsWith('Finger')) part.dx = shortX(part.dx)
+      if (forearm) part.hx *= FOREARM_SCALE
       const body = world.createBody({
         type: 'dynamic',
         position: this.at(x, y, part.dx, part.dy),
@@ -52,7 +59,7 @@ export class Player {
         : pl.Box(m(part.hx * scale), m(part.hy * scale))
       body.createFixture({
         shape,
-        density: part.density / (scale * scale),
+        density: part.density / (scale * scale * (forearm ? FOREARM_SCALE : 1)),
         friction,
         restitution: part.restitution,
       })
@@ -67,7 +74,7 @@ export class Player {
           { enableLimit: true, lowerAngle: rad(j.lower), upperAngle: rad(j.upper) },
           this.parts[j.a],
           this.parts[j.b],
-          this.at(x, y, j.dx, j.dy)
+          this.at(x, y, j.a.startsWith('Finger') ? shortX(j.dx) : j.dx, j.dy)
         )
       )
     }
@@ -93,8 +100,8 @@ export class Player {
       pl.PrismaticJoint(
         {
           enableLimit: true,
-          lowerTranslation: rail.lowerTranslation,
-          upperTranslation: rail.upperTranslation,
+          lowerTranslation: id === 2 ? m(NET_X - 8 - rail.x) : rail.lowerTranslation,
+          upperTranslation: id === 1 ? m(NET_X + 8 - rail.x) : rail.upperTranslation,
           enableMotor: false,
           maxMotorForce: 0,
           motorSpeed: 0,
@@ -141,6 +148,7 @@ export class Player {
 
   /** player::jump — one kick straight up plus a shove along the head/torso line. */
   jump() {
+    if (this.spike?.jump(this, MOVE.jumpImpulse)) return
     if (!(this.Ass.getWorldCenter().y > m(this.raised(MOVE.jumpGroundY, 'Ass')))) return
     const head = this.Head.getWorldCenter()
     const dir = pl.Vec2(head.x - this.Tors.getWorldCenter().x, head.y - this.Tors.getWorldCenter().y)
@@ -160,7 +168,7 @@ export class Player {
    * original its floaty mid-air steering.
    */
   turn(impulse) {
-    this.Ass.setLinearVelocity(pl.Vec2(0, 0))
+    if (!this.spike?.caught(this).length) this.Ass.setLinearVelocity(pl.Vec2(0, 0))
     if (this.Head.getWorldCenter().y * PHYS_SCALE > this.raised(MOVE.turnHeadSwitchY, 'Head')) {
       this.Ass.applyLinearImpulse(impulse, this.Ass.getWorldCenter(), true)
     } else {
@@ -170,8 +178,10 @@ export class Player {
 
   /** player::turnComp — the AI's softer variant of turn(). */
   turnComp(impulse) {
-    this.Ass.setLinearVelocity(pl.Vec2(0, 0))
-    this.Head.setLinearVelocity(pl.Vec2(0, 0))
+    if (!this.spike?.caught(this).length) {
+      this.Ass.setLinearVelocity(pl.Vec2(0, 0))
+      this.Head.setLinearVelocity(pl.Vec2(0, 0))
+    }
     if (this.Head.getWorldCenter().y * PHYS_SCALE > this.raised(MOVE.turnHeadSwitchY, 'Head')) {
       const half = pl.Vec2(impulse.x * 0.5, impulse.y * 0.5)
       this.Head.applyLinearImpulse(half, this.Head.getWorldCenter(), true)
@@ -212,9 +222,10 @@ export class Player {
 
   /** player::standPlayer — snap back to the upright pose at (x, y) in pixels. */
   standPlayer(x, y) {
+    this.serveContactMs = 0
     this.setLinVelZero()
     const put = (name, dx, dy) => {
-      this.parts[name].setTransform(this.at(x, y, dx, dy), 0)
+      this.parts[name].setTransform(this.at(x, y, /^(Hand|Finger)/.test(name) ? shortX(dx) : dx, dy), 0)
       this.parts[name].setAngularVelocity(0)
     }
     put('Head', 0, 2)
@@ -274,20 +285,22 @@ export class Player {
     this.ballJoint = null
     const hand = this.serveHand
     hand.applyLinearImpulse(
-      pl.Vec2(sign * SERVE.fingerImpulse.x, SERVE.fingerImpulse.y),
+      pl.Vec2(sign * SERVE.fingerImpulse.x * this.servePower, SERVE.fingerImpulse.y * this.servePower),
       hand.getWorldCenter(),
       true
     )
     ball.body.applyLinearImpulse(
-      pl.Vec2(sign * SERVE.ballImpulse.x, SERVE.ballImpulse.y),
+      pl.Vec2(sign * SERVE.ballImpulse.x * this.servePower, SERVE.ballImpulse.y * this.servePower),
       ball.body.getWorldCenter(),
       true
     )
     ball.ballOfPlayer = 0
     this.contact = 2
-    clearTimeout(this.touchTimer)
-    this.touchTimer = setTimeout(() => {
-      if (this.contact !== 0) this.contact = 3
-    }, SERVE.touchDelayMs)
+    this.serveContactMs = SERVE.touchDelayMs
+  }
+  updateServeContact(dtMs) {
+    if (this.serveContactMs <= 0) return
+    this.serveContactMs = Math.max(0, this.serveContactMs - dtMs)
+    if (this.serveContactMs === 0 && this.contact !== 0) this.contact = 3
   }
 }

@@ -2,6 +2,7 @@ import { getCharacterArt } from './character-art.js'
 import { DEFAULT_CHARACTERS } from './roster.js'
 import { mirrorCharacterPose } from './character-pose.js'
 import { drawRagdoll as drawVectorFallback } from './characters-vector.js'
+import { FOREARM_SCALE } from './player.js'
 import { drawSkinMesh } from './skin-mesh.js'
 
 const TAU = Math.PI * 2
@@ -115,8 +116,8 @@ function drawCharacter(ctx, parts, art, view) {
     const sign = side === 'Left' ? -1 : 1
     arms[side] = {
       shoulder: at('Arm' + side, -sign * 10, 0),
-      elbow: mix(at('Arm' + side, sign * 9, 0), at('Hand' + side, -sign * 10, 0)),
-      wrist: at('Hand' + side, sign * 12, 0),
+      elbow: mix(at('Arm' + side, sign * 9, 0), at('Hand' + side, -sign * 10 * FOREARM_SCALE, 0)),
+      wrist: at('Hand' + side, sign * 12 * FOREARM_SCALE, 0),
       tip: at('Finger' + side, sign * 7.5, 0),
     }
     // Retarget the drawn hips and knees to adult proportions while retaining

@@ -39,7 +39,7 @@ let active = true
 export function initControls() {
   window.addEventListener('keydown', (e) => {
     const code = CODE_TO_KEY[e.code]
-    if (code == null || !active) return
+    if (code == null || !active || e.target.closest?.('input, select, textarea, button, [contenteditable]')) return
     if (PREVENT_DEFAULT.has(e.code)) e.preventDefault()
     keyStack[code] = true
   })
