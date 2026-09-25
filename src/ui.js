@@ -1,4 +1,5 @@
 import './ui.css'
+import { CHARACTERS, getCharacter, loadCharacters, saveCharacters } from './roster.js'
 
 // Menus and match overlays, built in the DOM on top of the canvas. main.js owns
 // the phase and the clock; this module shows the phase and turns clicks and keys
@@ -61,6 +62,22 @@ const MATCH_OPTIONS = MATCH_LENGTHS.map((n) => `
     <span>${n || '∞'}</span>
   </label>`).join('')
 
+function characterPicker(id) {
+  return `<section class="character-player" data-picker="${id}" data-player="${id}" aria-labelledby="character-player-${id}">
+    <h3 id="character-player-${id}"><span data-player-name="${id}">${playerName(id)}</span><small> · ${id === 1 ? 'Слева' : 'Справа'}</small></h3>
+    <div class="character-preview">
+      <div class="character-portrait"><img data-portrait alt=""></div>
+      <div class="character-bio"><span class="character-tag"></span><h4 data-character-name></h4><p data-character-title></p></div>
+    </div>
+    <div class="character-roster" role="radiogroup" aria-label="Персонаж игрока ${id}">
+      ${CHARACTERS.map(character => `<label class="character-option" style="--skin-color:${character.color}">
+        <input type="radio" name="character-${id}" value="${character.id}" aria-label="${character.name}">
+        <span><img src="${character.image}" alt="" loading="lazy"><b>${character.name}</b></span>
+      </label>`).join('')}
+    </div>
+  </section>`
+}
+
 const TEMPLATE = `
   <button class="hud-pause" type="button" data-action="pause" aria-label="Pause" title="Pause (Esc)" hidden>
     <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="5" width="4.5" height="14" rx="1.5"/><rect x="13.5" y="5" width="4.5" height="14" rx="1.5"/></svg>
@@ -103,6 +120,14 @@ const TEMPLATE = `
       ${playerCard(2)}
     </div>
     <footer class="title-footer">${RULES}</footer>
+  </section>
+
+  <section class="screen screen-characters" data-screen="characters" role="dialog" aria-labelledby="ui-characters" lang="ru" hidden>
+    <div class="card character-select">
+      <header class="character-select-header"><p class="eyebrow">Neon Beach · Состав матча</p><h2 class="card-title" id="ui-characters">Выберите персонажей</h2><p>Каждому — свой стиль. Все играют на равных.</p></header>
+      <div class="character-lineup">${characterPicker(1)}${characterPicker(2)}</div>
+      <div class="character-select-footer"><button class="button" type="button" data-action="back">Назад</button><p>Выбор сохраняется автоматически</p><button class="button button-primary" type="button" data-action="start" data-autofocus>Начать матч</button></div>
+    </div>
   </section>
 
   <section class="screen" data-screen="pause" role="dialog" aria-labelledby="ui-paused" hidden>
@@ -208,7 +233,10 @@ export function initMenus({ settings, onPlay, onPause, onResume, onRestart, onMa
 
   function updateMode() {
     for (const el of root.querySelectorAll('[data-player-name]')) {
-      el.textContent = playerName(Number(el.dataset.playerName), mode)
+      const id = Number(el.dataset.playerName)
+      el.textContent = el.closest('[data-picker]')
+        ? (mode === 'bot' ? (id === 2 ? 'Бот' : 'Вы') : `Игрок ${id}`)
+        : playerName(id, mode)
     }
     for (const card of root.querySelectorAll('.player[data-player="2"]')) {
       card.querySelector('.keys').hidden = mode === 'bot'
@@ -224,6 +252,35 @@ export function initMenus({ settings, onPlay, onPause, onResume, onRestart, onMa
     })
   }
   updateMode()
+
+  let characters
+  try { characters = loadCharacters(localStorage) }
+  catch (_) { characters = loadCharacters(null) }
+
+  function updateCharacters() {
+    for (const picker of root.querySelectorAll('[data-picker]')) {
+      const side = Number(picker.dataset.picker) - 1
+      const character = getCharacter(characters[side])
+      picker.style.setProperty('--skin-color', character.color)
+      const portrait = picker.querySelector('[data-portrait]')
+      portrait.src = character.image
+      portrait.alt = character.name
+      portrait.classList.toggle('is-mirrored', character.template !== side)
+      picker.querySelector('[data-character-name]').textContent = character.name
+      picker.querySelector('[data-character-title]').textContent = character.title
+      picker.querySelector('.character-tag').textContent = character.wild ? 'Дикий выбор' : 'На площадку'
+      for (const input of picker.querySelectorAll('input')) input.checked = input.value === character.id
+    }
+  }
+  for (const input of root.querySelectorAll('.character-roster input')) {
+    input.addEventListener('change', () => {
+      const side = Number(input.closest('[data-picker]').dataset.picker) - 1
+      characters[side] = input.value
+      try { saveCharacters(localStorage, characters) } catch (_) {}
+      updateCharacters()
+    })
+  }
+  updateCharacters()
 
   let pointsToWin = loadMatchLength()
   for (const input of root.querySelectorAll('input[name="points"]')) {
@@ -278,7 +335,8 @@ export function initMenus({ settings, onPlay, onPause, onResume, onRestart, onMa
   }
 
   const actions = {
-    play: onPlay,
+    play: (button) => openOverlay('characters', button),
+    start: onPlay,
     pause: onPause,
     resume: onResume,
     restart: onRestart,
@@ -309,6 +367,8 @@ export function initMenus({ settings, onPlay, onPause, onResume, onRestart, onMa
       else if (phase === 'countdown' || phase === 'playing') onPause()
       else if (phase === 'paused') onResume()
     } else if (e.code === 'ArrowDown' || e.code === 'ArrowUp') {
+      // Native radio navigation lets each player browse their roster with arrows.
+      if (e.target.matches('.character-roster input')) return
       if (moveFocus(e.code === 'ArrowDown' ? 1 : -1)) e.preventDefault()
     }
   })
@@ -329,6 +389,9 @@ export function initMenus({ settings, onPlay, onPause, onResume, onRestart, onMa
   }
 
   const menus = {
+    get characters() {
+      return [...characters]
+    },
     get mode() {
       return mode
     },

@@ -1,4 +1,6 @@
-import { CHARACTER_ART } from './character-art.js'
+import { getCharacterArt } from './character-art.js'
+import { DEFAULT_CHARACTERS } from './roster.js'
+import { mirrorCharacterPose } from './character-pose.js'
 import { drawRagdoll as drawVectorFallback } from './characters-vector.js'
 import { drawSkinMesh } from './skin-mesh.js'
 
@@ -39,11 +41,27 @@ function mapped(part, from, to, unit, x, y) {
 }
 
 export function drawRagdoll(ctx, parts, playerIndex, view) {
-  const art = CHARACTER_ART[playerIndex]
+  const art = getCharacterArt(parts.characterId ?? DEFAULT_CHARACTERS[playerIndex])
   if (!art.ready) return drawVectorFallback(ctx, parts, playerIndex, view)
+  // Reflect both the pose and its drawing when a sprite plays on the other side.
+  // Swapping left/right bones keeps the painted hands on the physical hands.
+  const mirror = art.template !== playerIndex
+  ctx.save()
+  if (mirror) {
+    const headX = parts.Head.position[0]
+    const center = view.centerX + headX * view.scale
+    ctx.translate(center * 2, 0)
+    ctx.scale(-1, 1)
+    parts = mirrorCharacterPose(parts)
+  }
+  drawCharacter(ctx, parts, art, view)
+  ctx.restore()
+}
+
+function drawCharacter(ctx, parts, art, view) {
   // A bigger doll has bigger bodies, so the art and its offsets on them scale too.
   const unit = view.scale / 30 * (parts.scale ?? 1)
-  const facing = playerIndex === 0 ? 1 : -1
+  const facing = art.template === 0 ? 1 : -1
   const motion = parts.motion ?? { chest: 0, hair: 0 }
   const at = (name, x = 0, y = 0) => anchor(parts[name], x, y, view, unit)
   const waist = mix(at('Tors', 0, 5), at('Ass', 0, -13))
@@ -120,18 +138,18 @@ export function drawRagdoll(ctx, parts, playerIndex, view) {
       [art['thigh' + side].from, art['shin' + side].from, art['foot' + side].from, art['foot' + side].to],
       [l.hip, l.knee, l.ankle, l.sole], [97, 64, 44, 59], [0.08, 0.077, 0.074, 0.079], unit)
   }
-  const back = playerIndex === 0 ? 'Left' : 'Right'
-  const front = playerIndex === 0 ? 'Right' : 'Left'
+  const back = facing === 1 ? 'Left' : 'Right'
+  const front = facing === 1 ? 'Right' : 'Left'
   arm(back)
   leg(back)
   leg(front)
   drawSkinMesh(ctx, art.core, [art.torso.from, art.pelvis.from, art.pelvis.to],
-    [shoulders, waist, hips], [161, 148, 181], [art.torso.width, art.pelvis.width, art.pelvis.width], unit, motion.chest)
+    [shoulders, waist, hips], [161, 148, 181], [art.torso.width, art.pelvis.width, art.pelvis.width], unit, motion.chest * (art.softMotion ?? 1))
   arm(front)
   paint(ctx, art.head, head, headDown, unit)
 
   // Loose flyaway hairs respond to wind even for the tied blonde bun.
-  if (playerIndex === 1) {
+  if (art.wisps) {
     ctx.save()
     ctx.translate(head.x, head.y)
     ctx.scale(unit, unit)

@@ -257,6 +257,47 @@
 .bot-note { color: var(--c); font-size: 0.9rem; line-height: 1.6; }
 .bot-note span { color: var(--muted); font-size: 0.83rem; }
 
+/* --- character selection --- */
+.character-select { width: min(1020px, 100%); gap: 20px; }
+.character-select-header { display: grid; gap: 10px; text-align: center; }
+.character-select-header > p:last-child { color: var(--muted); font-size: 0.86rem; }
+.character-select .card-title { font-size: clamp(23px, 3.5vw, 36px); }
+.character-lineup { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+.character-player { min-width: 0; padding: 16px; border: 1px solid rgb(var(--c-rgb) / 0.3); border-radius: 18px; background: rgba(8, 5, 24, 0.4); }
+.character-player h3 { color: var(--c); font-size: 0.8rem; letter-spacing: 0.1em; text-transform: uppercase; }
+.character-player h3 small { color: var(--faint); font-weight: 500; }
+.character-preview { position: relative; display: grid; grid-template-columns: 55% 45%; align-items: center; min-height: 230px; margin: 10px 0 14px; overflow: hidden; border-radius: 12px; background: radial-gradient(ellipse at 32% 50%, color-mix(in srgb, var(--skin-color) 22%, transparent), transparent 70%); }
+.character-portrait { height: 230px; }
+.character-portrait img { display: block; width: 100%; height: 100%; object-fit: contain; filter: drop-shadow(0 0 14px color-mix(in srgb, var(--skin-color) 22%, transparent)); }
+.character-portrait img.is-mirrored { transform: scaleX(-1); }
+.character-bio { position: relative; padding: 12px 8px 12px 0; }
+.character-bio h4 { margin: 10px 0 8px; color: var(--text); font-size: clamp(20px, 2.4vw, 28px); line-height: 1.05; overflow-wrap: anywhere; }
+.character-bio p { color: var(--muted); font-size: 0.83rem; line-height: 1.5; }
+.character-tag { color: var(--skin-color); font-size: 0.65rem; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; }
+.character-roster { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 7px; }
+.character-option { position: relative; min-width: 0; }
+.character-option input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
+.character-option > span { display: grid; grid-template-rows: 56px minmax(30px, auto); overflow: hidden; border: 1px solid var(--line); border-radius: 10px; background: rgba(255, 255, 255, 0.025); transition: border-color 0.15s, background 0.15s; }
+.character-option img { width: 100%; height: 56px; object-fit: cover; object-position: 50% 5%; background: radial-gradient(ellipse at 50% 50%, color-mix(in srgb, var(--skin-color) 15%, transparent), transparent); }
+.character-option b { display: grid; place-items: center; padding: 4px 2px; color: var(--muted); font-size: 0.68rem; line-height: 1.15; text-align: center; }
+.character-option input:hover + span { border-color: var(--skin-color); background: rgba(255, 255, 255, 0.07); }
+.character-option input:checked + span { border-color: var(--skin-color); box-shadow: inset 0 0 0 1px var(--skin-color), 0 0 15px color-mix(in srgb, var(--skin-color) 18%, transparent); background: color-mix(in srgb, var(--skin-color) 12%, transparent); }
+.character-option input:checked + span b { color: #fff; }
+.character-option input:focus-visible + span { outline: 3px solid var(--focus); outline-offset: 2px; }
+.character-select-footer { display: flex; align-items: center; gap: 14px; }
+.character-select-footer p { flex: 1; color: var(--faint); font-size: 0.75rem; text-align: center; }
+@media (max-width: 650px) {
+  .character-lineup { grid-template-columns: 1fr; }
+  .character-preview, .character-portrait { min-height: 170px; height: 170px; }
+  .character-select-footer { flex-wrap: wrap; }
+  .character-select-footer p { order: 3; flex-basis: 100%; }
+  .character-select-footer .button-primary { flex: 1; }
+}
+@media (max-height: 760px) and (min-width: 651px) {
+  .character-preview, .character-portrait { min-height: 170px; height: 170px; }
+  .character-select { gap: 14px; }
+}
+
 .ui kbd {
   display: inline-flex;
   align-items: center;

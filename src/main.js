@@ -32,7 +32,7 @@ window.addEventListener('resize', () => { size = resize() })
 
 applyTuning(getSettings())
 
-function createGame(pointsToWin = 0, mode = 'humans') {
+function createGame(pointsToWin = 0, mode = 'humans', characters) {
   const settings = getSettings()
   const created = new Game({
     gravityY: settings.gravityY,
@@ -42,6 +42,7 @@ function createGame(pointsToWin = 0, mode = 'humans') {
     diskSize: settings.diskSize,
     pointsToWin,
     mode,
+    characters,
   })
   created.settle(SETTLE_FRAMES)
   return created
@@ -88,7 +89,7 @@ function setPhase(next) {
 }
 
 function newGame(pointsToWin) {
-  game = createGame(pointsToWin, menus.mode)
+  game = createGame(pointsToWin, menus.mode, menus.characters)
   canvas.setAttribute('aria-label', game.mode === 'bot'
     ? 'Ragdoll Volleyball. You: arrows and space. Right player: computer bot.'
     : 'Ragdoll Volleyball. Player 1: arrows and space. Player 2: WASD and R.')
@@ -173,7 +174,8 @@ function view(body, alpha) {
 }
 
 function viewPlayer(player, alpha, dt, time) {
-  const parts = { id: player.id, scale: player.scale }
+  const selection = phase === 'title' ? menus.characters : game.characters
+  const parts = { id: player.id, scale: player.scale, characterId: selection[player.id - 1] }
   for (const name of Object.keys(player.parts)) parts[name] = view(player.parts[name], alpha)
   parts.motion = updateSecondaryMotion(secondaryMotion[player.id - 1], parts.Tors, dt, time, player.id, reducedMotion?.matches)
   return parts

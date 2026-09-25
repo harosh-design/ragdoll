@@ -6,6 +6,7 @@ import {
 import { createWorld, createCourt, Ball, attachContactRules, BODY_HAZARD } from './world.js'
 import { Player } from './player.js'
 import { Bot } from './bot.js'
+import { normalizeCharacters } from './roster.js'
 
 const m = (px) => px / PHYS_SCALE
 
@@ -54,6 +55,7 @@ export class Game {
     this.playerScale = options.playerScale ?? 1
     this.mode = options.mode === 'bot' ? 'bot' : 'humans'
     this.bot = this.mode === 'bot' ? new Bot(2) : null
+    this.characters = normalizeCharacters(options.characters)
 
     this.world = createWorld(this.gravityY)
     this.court = createCourt(this.world)

@@ -1,5 +1,6 @@
 import magentaUrl from './assets/player-magenta.png'
 import cyanUrl from './assets/player-cyan.png'
+import { CHARACTERS, getCharacter } from './roster.js'
 
 // Bind-pose coordinates in the original 1024 × 1536 RGBA illustrations.
 // Masks separate overlapping cutout pieces; their bone endpoints are shared by
@@ -7,7 +8,7 @@ import cyanUrl from './assets/player-cyan.png'
 const polygon = (points) => `M${points.map(p => p.join(',')).join(' L')} Z`
 const region = (points, from, to, width = 0.09) => ({ mask: polygon(points), from, to, width })
 
-export const CHARACTER_ART = [
+const TEMPLATES = [
   {
     url: magentaUrl, rim: '#ff4ab5', skin: '#dba080', shade: '#a96863',
     head: region([[453,30],[609,30],[644,182],[602,249],[559,283],[478,273],[443,207]], [532,163], [530,263], 0.085),
@@ -48,9 +49,37 @@ export const CHARACTER_ART = [
   },
 ]
 
-for (const art of CHARACTER_ART) {
+export const CHARACTER_ART = Object.fromEntries(CHARACTERS.map(character => {
+  const template = TEMPLATES[character.template]
+  const art = Object.fromEntries(Object.entries(template).map(([key, value]) =>
+    [key, value?.mask ? { ...value } : value]))
+  Object.assign(art, { url: character.image, skin: character.skin, shade: character.shade,
+    rim: character.color, template: character.template, wisps: character.wisps })
+  if (!character.hair) art.hair = null
+  if (character.id === 'kai' || character.id === 'volt') {
+    art.head = region([[401,0],[665,0],[665,210],[576,274],[475,274],[414,217]], [529,147], [529,260], 0.085)
+    art.softMotion = character.id === 'volt' ? 0 : 0.25
+  }
+  if (character.id === 'luna') {
+    art.hair = region([[507,0],[447,0],[400,37],[353,127],[251,201],[214,293],[261,350],[351,399],[406,329],[457,253],[490,157]], [480,72], [355,311], 0.085)
+  }
+  if (character.wild) {
+    art.head = region([[400,0],[662,0],[662,260],[586,316],[478,326],[424,268]], [529,208], [530,315], 0.105)
+    art.torso = { ...art.torso, from: [525,369] }
+    art.softMotion = 0.25
+  }
+  return [character.id, art]
+}))
+
+/** Cutouts are cached only for characters actually shown on court. */
+export function getCharacterArt(id) {
+  const art = CHARACTER_ART[getCharacter(id).id]
+  if (!art.image) prepareArt(art)
+  return art
+}
+
+function prepareArt(art) {
   art.image = new Image()
-  art.image.src = art.url
   // Prepare head and hair cutouts and continuous limb textures once.
   // Runtime rendering deforms these cached transparent surfaces.
   art.image.onload = () => {
@@ -114,4 +143,5 @@ for (const art of CHARACTER_ART) {
     }
     art.ready = true
   }
+  art.image.src = art.url
 }

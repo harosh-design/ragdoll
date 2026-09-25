@@ -1,5 +1,9 @@
 # Character sprites
 
+The roster also includes `player-kai.png`, `player-luna.png`, `player-volt.png`
+and `player-pineapple.png`. Their prompts and production notes are in
+[`roster-prompts.md`](roster-prompts.md).
+
 `player-magenta.png` and `player-cyan.png` are 1024 × 1536 RGBA sprites created
 with the built-in `image_gen` tool. The renderer binds independently masked parts
 to the game's skeleton, with hair and chest secondary motion. Natural anatomy,

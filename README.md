@@ -39,6 +39,12 @@ pause menu offers resume, restart, controls, settings and the main menu, and
 the first player to reach the target gets a result screen with a rematch
 button. Arrow keys and Enter work in every menu.
 
+After **Play**, each side chooses from six characters: Ruby, Sky, Kai, Luna,
+Volt the robot, and Captain Pineapple. The selection screen previews each skin;
+in bot mode you can also choose the computer's character. Both players can pick
+the same character. Choices are stored locally and survive restarts, rematches
+and new rounds. Skins do not change physics, size, movement or difficulty.
+
 ## Physics
 
 The simulation runs on [planck.js](https://piqnt.com/planck.js/) (a JavaScript
@@ -80,6 +86,11 @@ The RGBA artwork is in `src/assets/player-magenta.png` and `player-cyan.png`;
 skin and fabric connected through the elbows, knees, waist and hips. A neck bridge
 follows the head and collar independently. The collision skeleton stays unchanged.
 `src/characters-vector.js` is the fallback while the images load.
+`src/roster.js` defines the six cosmetic identities and validates saved selections.
+Additional artwork and generation prompts are documented in
+[`src/assets/roster-prompts.md`](src/assets/roster-prompts.md). Cutout textures are
+prepared lazily and cached. `src/character-pose.js` mirrors a character's pose
+and swaps limb assignments when it plays on the opposite side of the net.
 `src/renderer.js` draws the court,
 net, volleyball, shadows, score, targets and disks, using the original's court
 framing. Rendering uses a 16:9 scene and a canvas backing resolution of up to 2×
@@ -105,3 +116,5 @@ The foreground centre is unobstructed; there are no floating leaves, fish or cra
 For close-up art review with the production renderer, open
 `/dev/character-preview.html` while Vite is running. Add `?pose=jump` to inspect
 the articulated cutouts in an airborne pose.
+Use `?characters=pineapple,volt` to inspect a chosen pair, or combine it with
+`&pose=jump` for the airborne pose.

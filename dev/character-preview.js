@@ -4,6 +4,7 @@ import { drawRagdoll } from '../src/characters.js'
 import { createSecondaryMotion, updateSecondaryMotion } from '../src/motion.js'
 const game = new Game({ hazards: false })
 const jumping = new URLSearchParams(location.search).get('pose') === 'jump'
+const characters = new URLSearchParams(location.search).get('characters')?.split(',')
 for (let frame = 0; frame < 100; frame++) {
   game.frame(g => {
     if (jumping && frame === 93) { g.player1.jump(); g.player2.jump() }
@@ -21,7 +22,7 @@ function frame(now) {
   ctx.fillStyle = '#17132b'; ctx.fillRect(0, 0, width, height)
   const scale = Math.min(height * 0.225, width * 0.145)
   for (const [i, player] of [game.player1, game.player2].entries()) {
-    const parts = { id: player.id }
+    const parts = { id: player.id, characterId: characters?.[i] }
     for (const [name, body] of Object.entries(player.parts)) {
       const p = body.getPosition(), v = body.getLinearVelocity()
       parts[name] = { position: [p.x - player.Head.getPosition().x, -(p.y - 355 / 30)], angle: -body.getAngle(), velocity: [v.x, -v.y], shapes: name === 'Head' ? [{radius: 1/3}] : [{height: 0.8}] }
