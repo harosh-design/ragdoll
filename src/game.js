@@ -3,7 +3,7 @@ import {
   TIME_STEP, TIME_STEP_GOAL, FRAME_RATE, ITERATIONS,
   SPAWN, GRAVITY_Y,
 } from './original.js'
-import { createWorld, createCourt, Ball, attachContactRules } from './world.js'
+import { createWorld, createCourt, Ball, BODY_PLAYER, attachContactRules } from './world.js'
 import { Player } from './player.js'
 import { Hazards } from './hazards.js'
 import { Spike } from './spike.js'
@@ -22,10 +22,6 @@ const GOAL_DELAY_MS = 2000
 export const SERVE_CLOCK_MS = 6000
 /** game::update decides the point on which side of 10.6 m the ball landed. */
 const COURT_CENTER_M = 10.6
-
-/** The friction value that identifies each player's parts, as in game::update. */
-const FRICTION_OF = { 0.5: 1, 0.51: 2 }
-
 
 /**
  * The rally rules from the original's `game` class, kept apart from anything
@@ -62,6 +58,8 @@ export class Game {
     this.lastPoint = null
     /** 1 or 2 once the match is won; the world then keeps running in slow motion. */
     this.winner = 0
+    /** Changes when bodies are teleported for the next serve. */
+    this.roundIndex = 0
     /** The original's win1: true when player 1 took the last point, so serves. */
     this.win1 = true
     this.onBallDown = false
@@ -119,9 +117,12 @@ export class Game {
     for (let edge = this.ball.body.getContactList(); edge; edge = edge.next) {
       const contact = edge.contact
       if (!contact.isTouching()) continue
-      const id = FRICTION_OF[contact.getFixtureA().getFriction()]
-        ?? FRICTION_OF[contact.getFixtureB().getFriction()]
-      if (id) return id
+      for (const fixture of [contact.getFixtureA(), contact.getFixtureB()]) {
+        const data = fixture.getBody().getUserData()
+        if (data?.bodyType === BODY_PLAYER && (data.player?.id === 1 || data.player?.id === 2)) {
+          return data.player.id
+        }
+      }
     }
     return 0
   }
@@ -146,6 +147,7 @@ export class Game {
   }
 
   newRound() {
+    this.roundIndex += 1
     this.spike.clear()
     this.bContact1 = this.bContact2 = false
     this.contactTimer1 = this.contactTimer2 = 0

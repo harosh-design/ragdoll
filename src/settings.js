@@ -1,41 +1,22 @@
-import { MOVE, BALL, GRAVITY_Y, TIME_STEP } from './original.js'
+import { MOVE, BALL } from './original.js'
+import { NUMERIC_SETTINGS, ORIGINAL_DEFAULTS, normalizeSettings } from './settings-model.js'
+
+export { ORIGINAL_DEFAULTS } from './settings-model.js'
 
 const STORAGE_KEY = 'ragdoll-volley-settings'
 const PRESETS_KEY = 'ragdoll-volley-presets'
 
-/**
- * Defaults are the original game's own values (see original.js). Anything moved
- * off a default is a deliberate departure from the Flash game — as is
- * playerScale, whose 1 is the original's doll; this project plays them bigger.
- */
-const defaults = {
-  gravityY: GRAVITY_Y,
-  timeStep: TIME_STEP,
-  playerScale: 1.15,
-  turnImpulse: MOVE.turnImpulse,
-  jumpImpulse: MOVE.jumpImpulse,
-  jumpBodyImpulse: MOVE.jumpBodyImpulse,
-  downImpulse: MOVE.downImpulse,
-  ballMaxVX: BALL.maxVX,
-  ballMaxVY: BALL.maxVY,
-  ballTouchImpulse: 1,
-  servePower: 1,
-  arena: 'side',
-}
-
-export const ORIGINAL_DEFAULTS = { ...defaults }
-
-let current = { ...defaults }
+let current = normalizeSettings()
 
 function loadFromStorage() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
     if (raw) {
       const parsed = JSON.parse(raw)
-      current = { ...defaults, ...parsed }
+      current = normalizeSettings(parsed)
     }
   } catch (_) {
-    current = { ...defaults }
+    current = normalizeSettings()
   }
 }
 
@@ -69,7 +50,7 @@ function loadPreset(name) {
   const presets = getPresets()
   const data = presets[name]
   if (!data) return
-  Object.assign(current, data)
+  current = normalizeSettings(data)
   save()
   location.reload()
 }
@@ -92,8 +73,8 @@ export function importSettingsFromFile(file) {
   reader.onload = () => {
     try {
       const parsed = JSON.parse(reader.result)
-      if (typeof parsed !== 'object' || parsed === null) throw new Error('Invalid format')
-      Object.assign(current, { ...defaults, ...parsed })
+      if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) throw new Error('Invalid format')
+      current = normalizeSettings(parsed)
       save()
       location.reload()
     } catch (e) {
@@ -104,11 +85,11 @@ export function importSettingsFromFile(file) {
 }
 
 export function getSettings() {
-  return current
+  return { ...current }
 }
 
 export function setSettings(partial) {
-  Object.assign(current, partial)
+  current = normalizeSettings({ ...current, ...partial })
 }
 
 /** Push tunable values back into the shared physics constants. */
@@ -175,22 +156,9 @@ export function initSettingsPanel(onChange, onRestart = () => location.reload())
   arenaSelect.addEventListener('change', () => { current.arena = arenaSelect.value; save(); onChange?.() })
   panel.appendChild(arenaRow)
 
-  const rows = [
-    ['gravityY', 'Гравитация (перезапуск)', 2, 25, 0.5, 'gravityY'],
-    ['timeStep', 'Шаг физики (перезапуск)', 0.01, 0.06, 0.001, 'timeStep'],
-    ['playerScale', 'Размер игроков (перезапуск)', 0.8, 1.5, 0.05, 'playerScale'],
-    ['turnImpulse', 'Импульс движения', 0, 12, 0.5, 'turnImpulse'],
-    ['jumpImpulse', 'Импульс прыжка', 0, 12, 0.5, 'jumpImpulse'],
-    ['jumpBodyImpulse', 'Импульс прыжка (корпус)', 0, 30, 0.5, 'jumpBodyImpulse'],
-    ['downImpulse', 'Импульс вниз', 0, 6, 0.25, 'downImpulse'],
-    ['ballMaxVX', 'Предел скорости мяча по X', 5, 40, 1, 'ballMaxVX'],
-    ['ballMaxVY', 'Предел скорости мяча по Y', 5, 40, 1, 'ballMaxVY'],
-    ['ballTouchImpulse', 'Подброс мяча при касании', 0, 4, 0.1, 'ballTouchImpulse'],
-    ['servePower', 'Сила подачи (×)', 0.25, 2.5, 0.05, 'servePower'],
-  ]
-  for (const [id, label, min, max, step, key] of rows) {
+  for (const [id, label, min, max, step] of NUMERIC_SETTINGS) {
     panel.appendChild(
-      slider(id, label, min, max, step, () => current[key], (v) => { current[key] = v }, () => {
+      slider(id, label, min, max, step, () => current[id], (v) => { current[id] = v }, () => {
         applyTuning(current)
         onChange?.()
       })

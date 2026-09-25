@@ -68,9 +68,15 @@ that patrols that half, where the ball loses most of its sideways speed.
 - `src/world.js` — world, court and ball.
 - `src/player.js` — the thirteen-part ragdoll and its moves.
 - `src/game.js` — rally and match rules; DOM-free, so the simulation can be run headless.
+- `src/fixed-step.js` — bounded fixed-step clock for the browser loop.
+- `src/presentation.js` — interpolation and cached physics-to-Canvas geometry.
 - `src/bot.js` — the computer controller, with reaction delay and trajectory prediction.
 - `src/controls.js`, `src/main.js` — input, the game phases, loop and rendering.
 - `src/ui.js`, `src/ui.css` — menus, countdown and point banners, in the DOM over the canvas.
+- `src/settings-model.js` — validated tuning values shared by storage and settings UI.
+
+The architecture review and comparison with similar games are in
+[`docs/architecture-review.md`](docs/architecture-review.md).
 
 ## Artwork
 

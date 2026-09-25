@@ -1,10 +1,12 @@
-import { PHYS_SCALE, FLOOR_Y, NET_X, COURT, BALL } from './original.js'
+import { PHYS_SCALE, FLOOR_Y, COURT, BALL } from './original.js'
 import { Game, FRAME_DT, SERVE_CLOCK_MS } from './game.js'
 import { initControls, applyControls, setControlsActive } from './controls.js'
 import { render } from './renderer.js'
 import { getSettings, initSettingsPanel, applyTuning } from './settings.js'
 import { createSecondaryMotion, updateSecondaryMotion, reducedMotion } from './motion.js'
 import { initMenus, COUNTDOWN_STEPS, COUNTDOWN_STEP_S } from './ui.js'
+import { createFixedStepClock } from './fixed-step.js'
+import { createPresentation } from './presentation.js'
 
 const m = (px) => px / PHYS_SCALE
 
@@ -50,7 +52,8 @@ function createGame(pointsToWin = 0, mode = 'humans', characters) {
 }
 
 let game = createGame()
-let accumulator = 0
+const clock = createFixedStepClock(FRAME_DT)
+let presentation = createPresentation()
 let secondaryMotion = [createSecondaryMotion(), createSecondaryMotion()]
 
 /**
@@ -64,10 +67,11 @@ let countdownLeft = 0
 
 initControls()
 const settingsPanel = initSettingsPanel(() => {
-  applyTuning(getSettings())
-  game.ballTouchImpulse = getSettings().ballTouchImpulse
-  game.servePower = getSettings().servePower
-  game.arena = getSettings().arena
+  const settings = getSettings()
+  applyTuning(settings)
+  game.ballTouchImpulse = settings.ballTouchImpulse
+  game.servePower = settings.servePower
+  game.arena = settings.arena
 }, () => startMatch())
 
 const menus = initMenus({
@@ -95,11 +99,13 @@ function newGame(pointsToWin) {
   canvas.setAttribute('aria-label', game.mode === 'bot'
     ? 'Ragdoll Volleyball. You: arrows and space. Right player: computer bot.'
     : 'Ragdoll Volleyball. Player 1: arrows and space. Player 2: WASD and R.')
-  accumulator = 0
+  clock.reset()
+  presentation = createPresentation()
   secondaryMotion = [createSecondaryMotion(), createSecondaryMotion()]
 }
 
 function countDown() {
+  clock.reset()
   countdownLeft = COUNTDOWN_STEPS * COUNTDOWN_STEP_S
   setPhase('countdown')
 }
@@ -133,52 +139,10 @@ const input = (g) => {
   if (g.mode === 'humans') applyControls(g.player2, g.ball)
 }
 
-// --- interpolation so a 30 fps simulation still renders smoothly ---
-const previous = new WeakMap()
-
-function rememberTransforms() {
-  for (let body = game.world.getBodyList(); body; body = body.getNext()) {
-    const p = body.getPosition()
-    previous.set(body, { x: p.x, y: p.y, a: body.getAngle() })
-  }
-}
-
-/**
- * Box2D is y-down; the drawing code works in y-up metres with the net at the
- * origin, so mirror position and angle on the way out.
- */
-function view(body, alpha) {
-  const p = body.getPosition()
-  const a = body.getAngle()
-  const prev = previous.get(body) ?? { x: p.x, y: p.y, a }
-  let da = a - prev.a
-  while (da > Math.PI) da -= Math.PI * 2
-  while (da < -Math.PI) da += Math.PI * 2
-  const fixture = body.getFixtureList()
-  const shape = fixture?.getShape()
-  const shapes = []
-  if (shape) {
-    if (shape.getType() === 'circle') {
-      shapes.push({ radius: shape.getRadius() })
-    } else {
-      let hx = 0
-      let hy = 0
-      for (const v of shape.m_vertices) { hx = Math.max(hx, Math.abs(v.x)); hy = Math.max(hy, Math.abs(v.y)) }
-      shapes.push({ width: hx * 2, height: hy * 2 })
-    }
-  }
-  return {
-    position: [prev.x + (p.x - prev.x) * alpha - m(NET_X), -(prev.y + (p.y - prev.y) * alpha - m(FLOOR_Y))],
-    angle: -(prev.a + da * alpha),
-    velocity: [body.getLinearVelocity().x, -body.getLinearVelocity().y],
-    shapes,
-  }
-}
-
 function viewPlayer(player, alpha, dt, time) {
   const selection = phase === 'title' ? menus.characters : game.characters
   const parts = { id: player.id, scale: player.scale, characterId: selection[player.id - 1] }
-  for (const name of Object.keys(player.parts)) parts[name] = view(player.parts[name], alpha)
+  for (const name of Object.keys(player.parts)) parts[name] = presentation.view(player.parts[name], alpha)
   parts.motion = updateSecondaryMotion(secondaryMotion[player.id - 1], parts.Tors, dt, time, player.id, reducedMotion?.matches)
   return parts
 }
@@ -200,12 +164,12 @@ function gameLoop(now) {
   // After the winning point the world keeps drifting in its goal slow motion
   // behind the result.
   if (phase === 'playing' || phase === 'over') {
-    accumulator += frameTime
-    while (accumulator >= FRAME_DT) {
-      rememberTransforms()
+    clock.advance(frameTime, () => {
+      presentation.capture(game.world)
+      const round = game.roundIndex
       game.frame(input)
-      accumulator -= FRAME_DT
-    }
+      if (game.roundIndex !== round) presentation.capture(game.world)
+    })
   }
 
   // The banner follows the replay, so it outlasts a pause but not a restart.
@@ -213,7 +177,7 @@ function gameLoop(now) {
   if (phase === 'playing' && game.winner) setPhase('over')
 
   const held = game.ball.ballOfPlayer
-  const alpha = Math.min(1, accumulator / FRAME_DT)
+  const alpha = clock.alpha
   render(ctx, size, {
     players: [viewPlayer(game.player1, alpha, frameTime, now / 1000), viewPlayer(game.player2, alpha, frameTime, now / 1000)],
     arena: game.arena,
@@ -221,10 +185,10 @@ function gameLoop(now) {
     impaled: [game.spike.caught(game.player1).length > 0, game.spike.caught(game.player2).length > 0],
     hazardCooldown: game.hazards?.cooldown ?? 0,
     time: reducedMotion?.matches ? 0 : now / 1000,
-    ball: view(game.ball.body, alpha),
+    ball: presentation.view(game.ball.body, alpha),
     ballRadius: m(BALL.radius),
-    targets: game.targets.map((t) => ({ ...view(t.body, alpha), side: t.side })),
-    disks: game.disks.map((d) => ({ ...view(d.body, alpha), side: d.side })),
+    targets: game.targets.map((t) => ({ ...presentation.view(t.body, alpha), side: t.side })),
+    disks: game.disks.map((d) => ({ ...presentation.view(d.body, alpha), side: d.side })),
     netHeight: m(FLOOR_Y - (COURT.net.y - COURT.net.hy)),
     score: game.score,
     hud: phase !== 'title',
